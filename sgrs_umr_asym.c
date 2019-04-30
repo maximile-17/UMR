@@ -363,7 +363,8 @@ int main(int argc, char **argv)
 		printf("\n================================================\n");
 	}
 	// bench S/G performance of send/recv
-		int test = UMR;
+		int test;
+		test = UMR;
 		{
 		struct ibv_send_wr *bad_wr;
 		struct ibv_recv_wr *bad_rr;
@@ -596,16 +597,16 @@ int main(int argc, char **argv)
 					printf("%x ", buf[j]);
 				}
 				printf("\n================================================\n");
-				for (m = 0; m < parameters.block_num;  m++) {
-					for (n = 0; n < parameters.block_size; n++) {
-						j = (test != SR_COPY) ? (m * parameters.stride + n) : (m * parameters.block_size + n);
-						if (buf[j] != c) {
-							fprintf(stderr, "failed to verify the received data @%d!\n", j);
-							break;
-						}
-					}
-					c++;
-				}
+			//	for (m = 0; m < parameters.block_num;  m++) {
+			//		for (n = 0; n < parameters.block_size; n++) {
+			//			j = (test != SR_COPY) ? (m * parameters.stride + n) : (m * parameters.block_size + n);
+			//			if (buf[j] != c) {
+			//				fprintf(stderr, "failed to verify the received data @%d!\n", j);
+			//				break;
+			//			}
+			//		}
+			//		c++;
+			//	}
 			} else {
 				// copy the buffer
 				if (test == SR_COPY) {

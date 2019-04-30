@@ -12,7 +12,7 @@
  * UMR and UMR_W use the same buf as SGRS
  */
 
-#include "sgrs_umr.h"
+#include "sgrs_umr_largelist.h"
 
 int main(int argc, char **argv)
 {
@@ -380,7 +380,7 @@ int main(int argc, char **argv)
 		printf("\n================================================\n");
 	}
 	// bench S/G performance of send/recv
-	for (int test = SGRS; test < TEST_END; test++) {
+	for (int test = SR_COPY; test < TEST_END; test++) {
 		struct ibv_send_wr *bad_wr;
 		struct ibv_recv_wr *bad_rr;
 		struct ibv_wc wc;
@@ -511,10 +511,10 @@ int main(int argc, char **argv)
 				for (i=0; i<sglist_num; i++ ){
 					nsr[i] = (const struct ibv_send_wr){ 0 };
 					nsr[i].wr_id = WR_ID+i;
-					nsr[i].next = (i == (sglist_num-1)) ? NULL : &srr[i+1];
+					nsr[i].next = (i == (sglist_num-1)) ? NULL : &nsr[i+1];
 					nsr[i].sg_list = &esg_list[dev_attr.max_sge*i];
 					nsr[i].num_sge = (i == (sglist_num-1)) ? last_sge_num : dev_attr.max_sge; 
-					nsr[i].opcod = IBV_WR_SEND;
+					nsr[i].opcode = IBV_WR_SEND;
 					nsr[i].send_flags = IBV_SEND_SIGNALED;
 				}
 			}else{
@@ -546,8 +546,8 @@ int main(int argc, char **argv)
 						goto EXIT_DESTROY_EQP;
 					}
 				} else if(test == SGRS) {
-					for(i=0; i<sglist_num; i++){
-						if (ibv_post_recv(qp, &nrr[i], &bad_rr)) {
+					for(j=0; j<sglist_num; j++){
+						if (ibv_post_recv(qp, &nrr[j], &bad_rr)) {
 							fprintf(stderr, "SGRS failed to post %dst receive WR!\n",i);
 							goto EXIT_DESTROY_EQP;
 						}
@@ -580,8 +580,8 @@ int main(int argc, char **argv)
 						goto EXIT_DESTROY_EQP;
 					}	
 				} else if(test == SGRS) {
-					for(i=0; i<sglist_num; i++){
-						if (ibv_post_send(qp, &srr[i], &bad_rr)) {
+					for(j=0; j<sglist_num; j++){
+						if (ibv_post_send(qp, &nsr[j], &bad_wr)) {
 							fprintf(stderr, "SGRS failed to post %dst send WR!\n",i);
 							goto EXIT_DESTROY_EQP;
 						}
@@ -628,7 +628,7 @@ int main(int argc, char **argv)
 					fprintf(stderr, "rank%d UMR Work completion status is:%s", myrank, ibv_wc_status_str(ewc.status));
 					goto EXIT_DESTROY_EQP;
 				}
-			}else if(!myrank){
+			}else if((test == UMR_W) && (!myrank)){
 				do ne = ibv_exp_poll_cq(ecq, 1, &ewc, sizeof(ewc)); while (ne ==0);
 				if (ne < 0) {
 					fprintf(stderr, "rank%d failed to read UMR CQ!\n", myrank);
@@ -641,9 +641,10 @@ int main(int argc, char **argv)
 				}
 				if(dbg) MPI_Barrier(MPI_COMM_WORLD);
 			}
-			if (myrank && dbg) {
+			if (myrank) {
+				if(dbg){
 				// receiver verifies the buffer
-				if((test == UMR_W) && (dbg)) MPI_Barrier(MPI_COMM_WORLD);
+				if((test == UMR_W)) MPI_Barrier(MPI_COMM_WORLD);
 				buf = (test == SR_COPY) ? (unsigned char *)buf_sg : (unsigned char *)buf_umr;
 				c = 0x01;
 				printf("[%s] ", (test == SGRS) ? "sgrs" : ((test == UMR) ? "umr" : ((test == UMR_W) ? "umr_write " : "sr_copy")));
@@ -661,6 +662,7 @@ int main(int argc, char **argv)
 						}
 					}
 					c++;
+				}
 				}
 			} else {
 				// copy the buffer
