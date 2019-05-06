@@ -11,7 +11,7 @@
 
 #define IB_DEV   (1) //change 0-1 because there are 2 mlx5 card ,the second is useable
 #define IB_PORT  (1)
-#define CQ_DEPTH (64)
+#define CQ_DEPTH (256)
 #define WR_ID    (519)
 
 #define MAX_SIZE (65536)
@@ -40,9 +40,9 @@ struct ib_conn {
 	int myid;
 };
 enum sg_test {
+	UMR_W,
 	SR_COPY,  // n copy, one send/recv
 	UMR,
-	UMR_W,
 	SGRS,     // 0 copy, one send/recv
 	TEST_END
 };

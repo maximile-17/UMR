@@ -114,8 +114,8 @@ int main(int argc, char **argv)
 
 	// print some device info
 	if(myrank)
-		printf("rank%d | device: %s | port: %d | lid: %u | max sge: %d | max mr:%d | max cqe:%d\n",
-	        myrank, ibv_get_device_name(dev), IB_PORT, port_attr.lid, dev_attr.max_sge, dev_attr.max_mr, dev_attr.max_cqe);
+		printf("rank%d | device: %s | port: %d | lid: %u | max sge: %d | max mr:%d | max cqe:%d | max qp wr:%d\n",
+	        myrank, ibv_get_device_name(dev), IB_PORT, port_attr.lid, dev_attr.max_sge, dev_attr.max_mr, dev_attr.max_cqe, dev_attr.max_qp_wr);
 
 	// allocate protection domain
 	pd = ibv_alloc_pd(dev_ctx);
@@ -381,9 +381,11 @@ int main(int argc, char **argv)
 	}
 	// bench S/G performance of send/recv
 	for (int test = SR_COPY; test < TEST_END; test++) {
+	//for (int test = SGRS; test < TEST_END; test++) {
 		struct ibv_send_wr *bad_wr;
 		struct ibv_recv_wr *bad_rr;
 		struct ibv_wc wc;
+		struct ibv_wc nwc[sglist_num+1];
 		struct ibv_exp_wc ewc;
 		struct ibv_exp_send_wr *bad_esr;//for umr
 		struct ibv_exp_mem_region  mem_reg_list[mr_num];
@@ -397,10 +399,10 @@ int main(int argc, char **argv)
 		uint64_t ticks[parameters.iterN];
 
 		int i, j, m, n;
-		int ne;
+		int ne, ne_sum;
 		unsigned char c;
 		umr_length = 0;
-
+		ne_sum = 0;
 		// prepare the buffers
 		memset(buf_sg, 0x00, buf_size); 
 		memset(buf_cp, 0x00, buf_size);
@@ -486,7 +488,7 @@ int main(int argc, char **argv)
 			} else if(test == SGRS) {
 				for (i=0; i<sglist_num; i++ ){
 					nrr[i] = (const struct ibv_recv_wr){ 0 };
-					nrr[i].wr_id = WR_ID+i;
+					nrr[i].wr_id = WR_ID+i+1;
 					nrr[i].next = (i == (sglist_num-1)) ? NULL : &nrr[i+1];
 					nrr[i].sg_list = &esg_list[dev_attr.max_sge*i];
 					nrr[i].num_sge = (i == (sglist_num-1)) ? last_sge_num : dev_attr.max_sge; 
@@ -510,7 +512,7 @@ int main(int argc, char **argv)
 			} else if(test == SGRS) {
 				for (i=0; i<sglist_num; i++ ){
 					nsr[i] = (const struct ibv_send_wr){ 0 };
-					nsr[i].wr_id = WR_ID+i;
+					nsr[i].wr_id = WR_ID+i+1;
 					nsr[i].next = (i == (sglist_num-1)) ? NULL : &nsr[i+1];
 					nsr[i].sg_list = &esg_list[dev_attr.max_sge*i];
 					nsr[i].num_sge = (i == (sglist_num-1)) ? last_sge_num : dev_attr.max_sge; 
@@ -545,10 +547,10 @@ int main(int argc, char **argv)
 						fprintf(stderr, "failed to post receive WR!\n");
 						goto EXIT_DESTROY_EQP;
 					}
-				} else if(test == SGRS) {
+				}else if(test == SGRS) {
 					for(j=0; j<sglist_num; j++){
 						if (ibv_post_recv(qp, &nrr[j], &bad_rr)) {
-							fprintf(stderr, "SGRS failed to post %dst receive WR!\n",i);
+							fprintf(stderr, "SGRS failed to post %dst receive WR!\n",j);
 							goto EXIT_DESTROY_EQP;
 						}
 					}
@@ -560,7 +562,7 @@ int main(int argc, char **argv)
 				}	
 				// wait for send
 				MPI_Barrier(MPI_COMM_WORLD);
-			} else {
+			} else if (!myrank){
 				// wait for recv
 				MPI_Barrier(MPI_COMM_WORLD);
 
@@ -585,6 +587,17 @@ int main(int argc, char **argv)
 							fprintf(stderr, "SGRS failed to post %dst send WR!\n",i);
 							goto EXIT_DESTROY_EQP;
 						}
+//						do ne = ibv_poll_cq(cq, 1, &wc); while (ne == 0);
+//						fprintf(stderr, "rank%d Work completion status is:%s ID is %d.\n", myrank, ibv_wc_status_str(wc.status), wc.wr_id);
+//						if (ne < 0) {
+//							fprintf(stderr, "rank%d failed to read CQ!\n", myrank);
+//							goto EXIT_DESTROY_EQP;
+//						}
+//						if (wc.status != IBV_WC_SUCCESS) {
+//							fprintf(stderr, "rank%d failed to execute WR!\n", myrank);
+//							fprintf(stderr, "rank%d Work completion status is:%s", myrank, ibv_wc_status_str(wc.status));
+//							goto EXIT_DESTROY_EQP;
+//						}
 					}				
 				}else{
 					if (ibv_post_send(eqp, &sr, &bad_wr)) {
@@ -607,16 +620,27 @@ int main(int argc, char **argv)
 					goto EXIT_DESTROY_EQP;
 				}
 			} else if(test == SGRS) {
-				do ne = ibv_poll_cq(cq, sglist_num, &wc); while (ne == 0);
-				if (ne < 0) {
-					fprintf(stderr, "rank%d failed to read CQ!\n", myrank);
-					goto EXIT_DESTROY_EQP;
-				}
-				if (wc.status != IBV_WC_SUCCESS) {
-					fprintf(stderr, "rank%d failed to execute WR!\n", myrank);
-					fprintf(stderr, "rank%d Work completion status is:%s ID is %d.", myrank, ibv_wc_status_str(wc.status), wc.wr_id);
-					goto EXIT_DESTROY_EQP;
-				}
+//				if(myrank){
+					do {
+						ne = ibv_poll_cq(cq, sglist_num-ne_sum, &nwc[ne_sum]);
+						if (ne < 0) {
+							fprintf(stderr, "rank%d failed to read CQ!\n", myrank);
+							goto EXIT_DESTROY_EQP;
+						}else ne_sum = ne + ne_sum;
+					//	printf("iter%d rank%d ne is %d\n",i, myrank, ne);
+				
+					} while (ne_sum < sglist_num);
+					//} while (ne < sglist_num);
+					for(j=0; j<sglist_num; j++){
+					//	fprintf(stderr, "iter%d rank%d Work completion status is:%s ID is %d.\n",i, myrank, ibv_wc_status_str(nwc[j].status), nwc[j].wr_id);
+						if (nwc[j].status != IBV_WC_SUCCESS) {
+							fprintf(stderr, "rank%d failed to execute WR!\n", myrank);
+							fprintf(stderr, "rank%d Work completion status is:%s ID is %d.\n", myrank, ibv_wc_status_str(nwc[j].status), nwc[j].wr_id);
+							goto EXIT_DESTROY_EQP;
+						}	
+					}
+					ne_sum = 0;
+//				}
 			}else if(test == UMR){
 				do ne = ibv_exp_poll_cq(ecq, 1, &ewc, sizeof(ewc)); while (ne ==0);
 				if (ne < 0) {
@@ -642,17 +666,18 @@ int main(int argc, char **argv)
 				if(dbg) MPI_Barrier(MPI_COMM_WORLD);
 			}
 			if (myrank) {
-				if(dbg){
+				//if(dbg){
 				// receiver verifies the buffer
-				if((test == UMR_W)) MPI_Barrier(MPI_COMM_WORLD);
+				if((test == UMR_W) && dbg) MPI_Barrier(MPI_COMM_WORLD);
 				buf = (test == SR_COPY) ? (unsigned char *)buf_sg : (unsigned char *)buf_umr;
 				c = 0x01;
+				if(dbg){
 				printf("[%s] ", (test == SGRS) ? "sgrs" : ((test == UMR) ? "umr" : ((test == UMR_W) ? "umr_write " : "sr_copy")));
 				printf("================received buf data===============\n");
 				for (j = 0; j < buf_size; j++){
 					printf("%x ", buf[j]);
 				}
-				printf("\n================================================\n");
+				printf("\n================================================\n");}
 				for (m = 0; m < parameters.block_num;  m++) {
 					for (n = 0; n < parameters.block_size; n++) {
 						j = (test != SR_COPY) ? (m * parameters.stride + n) : (m * parameters.block_size + n);
@@ -663,8 +688,8 @@ int main(int argc, char **argv)
 					}
 					c++;
 				}
-				}
-			} else {
+				//}
+			}else if(!myrank){
 				// copy the buffer
 				if (test == SR_COPY) {
 					for (j = 0; j < parameters.block_num; j++) {
