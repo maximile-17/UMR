@@ -1,0 +1,168 @@
+实验补充：
+1、length
+2、UMR 不对称、注册不绑定实际地址
+3、sg_list大小
+实验结果：
+1、ibv_exp_post_send（*ibv_qp qp, *ibv_exp_send_wr wr, **ibv_exp_send_wr bad_wr）使用的ibv_exp_send_wr.umr.mem_list.mem_reg_list结构体中，每个mem_reg_list含有addr、mr、length参数，其中length是指对应的mr中实际要传送数据的长度而并非每个mr的长度
+2、收发两端的UMR可以不对称
+3、sg_list支持的项目数量少，使用UMR虽然能支持到65536个MR，但是使用UMR性能更差。
+支持UMR的mellanox产品CX-4开始
+报告内容:
+	前期测试：基本的性能测试
+1、非连续数据的应用
+2、手工pack的问题，memcopy的问题
+3、网卡支持的各种方法
+单边read、write、SGRS
+4、umr双边0拷贝的read/write
+		灵活性（绑定地址）
+		非对称
+		sge长度，kml长度
+	结论：1822缺少支持
+
+?
+
+
+
+非连续数据通信卸载测试报告
+
+
+
+
+
+
+
+
+
+
+中国科学院计算技术研究所
+2019年5月
+?
+目 录
+1	概述	4
+1.1	非连续数据通信背景及介绍	4
+1.2	MPI DDT介绍	4
+1.3	网卡非连续数据通信支持	4
+1.3.1	通信方式	4
+1.3.2	数据描述	4
+1.4	网卡卸载方案	5
+1.4.1	单边0-copy	5
+1.4.2	双边0-copy	5
+2	测试目的	5
+2.1	人工pack性能	5
+2.2	网卡卸载性能	5
+2.2.1	Sg_list	5
+2.2.2	UMR	5
+2.3	MPI实现方式	5
+2.3.1	OpenMPI	5
+2.3.2	MVAPICH2	5
+2.4	真实应用效果	5
+3	测试计划	7
+3.1	pack开销占比	7
+3.1.1	vector size	7
+3.1.2	process number	7
+3.2	SGRS(sg_list) VS copy	7
+3.2.1	双边Pack	7
+3.2.2	gather-write	7
+3.2.3	multi-write	7
+3.2.4	双边-SGRS	7
+3.3	2dfft_MPI DDT	7
+3.3.1	OpenMPI	7
+3.3.2	MVAPICH2	7
+3.4	DDTbench	7
+3.4.1	7个科学计算的典型benchmark	7
+3.5	UMR性能测试	7
+3.5.1	Mellanox CX-5 copy VS sge VS UMR	7
+3.5.2	非对称数据分布	7
+3.5.3	容量对比	7
+4	实验环境	9
+5	实验结果	9
+5.1	Pack与通信占比	9
+5.2	2dfft_MPI DDT	9
+5.3	DDTbench	9
+5.4	SGRS(sg_list) VS copy	9
+5.5	UMR性能测试分析	9
+5.5.1	Mellanox CX-5 copy VS sge VS UMR	9
+5.5.2	非对称数据分布	9
+5.5.3	容量对比	9
+6	结论	10
+7	参考文献	10
+1	概述
+1.1	非连续数据通信背景及介绍
+非连续数据通信在
+1.2	MPI DDT介绍
+1.3	网卡非连续数据通信支持
+1.3.1	通信方式
+send/receive、read/write
+1.3.2	数据描述
+Sg_list、UMR
+1.4	网卡卸载方案
+1.4.1	单边0-copy
+1.	基于Read/Write+copy
+1.4.2	双边0-copy
+1.	基于Send/Recv和sg_list——SGRS
+2.	基于UMR（User-Model Memory Registration）
+2	测试目的
+2.1	人工pack性能
+为寻找到切实有用的性能提升点，在工作中，使用OSU基准测试[1]详细测试了Huawei 1822网卡与Mellanox ConnextX-5网卡在基本性能上的差异，找到性能差异项和有较大卸载价值的工作，作为1822卸载加速的着眼点。
+2.2	网卡卸载性能
+2.2.1	Sg_list
+2.2.2	UMR
+2.3	MPI实现方式
+2.3.1	OpenMPI
+2.3.2	MVAPICH2
+2.4	真实应用效果
+根据已有网卡的特性，结合MPI的实现机制和应用特点，从中发现网卡在MPI通信中可以卸载的两方面重要工作：（1）使用网卡完成MPI TM（tag matching）操作，减少CPU查询TM链表开销，提高通信计算的重叠；（2）使用网卡完成MPI DDT（Derived Data Type）的卸载，减少CPU内存拷贝，提高通信性能。针对这两方面可以卸载的工作，对Mellanox网卡的相关特性进行了详尽的测试，为Huawei 1822网卡卸载MPI通信提供了一定的技术方向。
+3	测试计划
+3.1	pack开销占比
+3.1.1	vector size
+3.1.2	process number
+3.2	SGRS(sg_list) VS copy
+3.2.1	双边Pack
+3.2.2	gather-write
+3.2.3	multi-write
+3.2.4	双边-SGRS
+3.3	2dfft_MPI DDT
+3.3.1	OpenMPI
+3.3.2	MVAPICH2
+3.4	DDTbench
+3.4.1	7个科学计算的典型benchmark
+3.5	UMR性能测试
+3.5.1	Mellanox CX-5 copy VS sge VS UMR
+3.5.2	非对称数据分布
+3.5.3	容量对比
+
+
+从四个方面对比Huawei 1822和Mellanox CX5的区别，（1）OSU基准测试[1]，其中包含点对点以及单边通信的带宽延迟基础测试；（2）对比利用硬件卸载Tag-Matching与软件卸载对大消息Rendezvous[2]协议进行卸载性能差异；（3）测试计算Compute和Communicate的交叠程度，该指标高可以说明计算和通信的流水比较好，通信可以及时为计算供应数据，且不阻塞计算过程；（4）测试对比使用单边、双边0-copy方式完成非连续数据通信的性能差别、灵活性、优劣。
+表格 1.2 1 测试计划
+	Huawei 1822	Mellanox CX5
+MPI版本	?	mvapich2-2.3rc2
+?	openmpi-3.1.0	?	mvapich2-2.3rc2
+?	openmpi-3.1.0
+OSU benchmark	?	osu-micro-benchmarks-5.4.2	?	osu-micro-benchmarks-5.4.2
+TM & RNDV offload	?	不支持	?	硬件卸载TM 
+?	软件卸载MLNX HPC-X[3]
+C&C Overlap	?	MadMPI benchmark 0.2(ICPP’16)[4]	?	MadMPI benchmark 0.2(ICPP’16)
+UMR	?	不支持	?	支持
+Sg_list	?	支持	?	支持
+4	实验环境
+5	实验结果
+5.1	Pack与通信占比
+5.2	2dfft_MPI DDT
+5.3	DDTbench
+ 
+5.4	SGRS(sg_list) VS copy
+5.5	UMR性能测试分析
+5.5.1	Mellanox CX-5 copy VS sge VS UMR
+5.5.2	非对称数据分布
+5.5.3	容量对比
+Kml max_sge
+6	结论
+
+
+
+7	参考文献
+1. OSU Benchmark: http://mvapich.cse.ohio-state.edu/benchmarks/
+2. ophirmaor. Understanding MPI Tag Matching and Rendezvous Offloads (ConnectX-5). https://community.mellanox.com/docs/DOC-2583
+3. Mellanox HPC-X? Software Toolkit. http://www.mellanox.com/page/products_dyn?product_family=189&mtag=hpc-x
+4. Denis A, Trahay F. MPI overlap: Benchmark and analysis[C]//Parallel Processing (ICPP), 2016 45th International Conference on. IEEE, 2016: 258-267.
+
