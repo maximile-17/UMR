@@ -11,7 +11,7 @@
 
 #define IB_DEV   (1) //change 0-1 because there are 2 mlx5 card ,the second is useable
 #define IB_PORT  (1)
-#define CQ_DEPTH (64)
+#define CQ_DEPTH (2048)
 #define WR_ID    (519)
 
 #define MAX_SIZE (65536)

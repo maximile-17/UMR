@@ -12,7 +12,7 @@
  * UMR and UMR_W use the same buf as SGRS
  */
 
-#include "sgrs_umr_largelist.h"
+#include "sgrs_umr.h"
 
 int main(int argc, char **argv)
 {
@@ -380,8 +380,8 @@ int main(int argc, char **argv)
 		printf("\n================================================\n");
 	}
 	// bench S/G performance of send/recv
-	for (int test = SR_COPY; test < TEST_END; test++) {
-	//for (int test = SGRS; test < TEST_END; test++) {
+	for (int test = SGRS; test < TEST_END; test++) {
+	//int test; test = SGRS;{
 		struct ibv_send_wr *bad_wr;
 		struct ibv_recv_wr *bad_rr;
 		struct ibv_wc wc;
@@ -548,12 +548,16 @@ int main(int argc, char **argv)
 						goto EXIT_DESTROY_EQP;
 					}
 				}else if(test == SGRS) {
-					for(j=0; j<sglist_num; j++){
-						if (ibv_post_recv(qp, &nrr[j], &bad_rr)) {
+						if (ibv_post_recv(qp, &nrr[0], &bad_rr)) {
 							fprintf(stderr, "SGRS failed to post %dst receive WR!\n",j);
 							goto EXIT_DESTROY_EQP;
 						}
-					}
+				//	for(j=0; j<sglist_num; j++){
+				//		if (ibv_post_recv(qp, &nrr[j], &bad_rr)) {
+				//			fprintf(stderr, "SGRS failed to post %dst receive WR!\n",j);
+				//			goto EXIT_DESTROY_EQP;
+				//		}
+				//	}
 				}else if(test == UMR){
 					if (ibv_post_recv(eqp, &rr, &bad_rr)) {
 						fprintf(stderr, "failed to post UMR receive WR!\n");
@@ -582,23 +586,16 @@ int main(int argc, char **argv)
 						goto EXIT_DESTROY_EQP;
 					}	
 				} else if(test == SGRS) {
-					for(j=0; j<sglist_num; j++){
-						if (ibv_post_send(qp, &nsr[j], &bad_wr)) {
+						if (ibv_post_send(qp, &nsr[0], &bad_wr)) {
 							fprintf(stderr, "SGRS failed to post %dst send WR!\n",i);
 							goto EXIT_DESTROY_EQP;
 						}
-//						do ne = ibv_poll_cq(cq, 1, &wc); while (ne == 0);
-//						fprintf(stderr, "rank%d Work completion status is:%s ID is %d.\n", myrank, ibv_wc_status_str(wc.status), wc.wr_id);
-//						if (ne < 0) {
-//							fprintf(stderr, "rank%d failed to read CQ!\n", myrank);
-//							goto EXIT_DESTROY_EQP;
-//						}
-//						if (wc.status != IBV_WC_SUCCESS) {
-//							fprintf(stderr, "rank%d failed to execute WR!\n", myrank);
-//							fprintf(stderr, "rank%d Work completion status is:%s", myrank, ibv_wc_status_str(wc.status));
-//							goto EXIT_DESTROY_EQP;
-//						}
-					}				
+				//	for(j=0; j<sglist_num; j++){
+				//		if (ibv_post_send(qp, &nsr[j], &bad_wr)) {
+				//			fprintf(stderr, "SGRS failed to post %dst send WR!\n",i);
+				//			goto EXIT_DESTROY_EQP;
+				//		}
+				//	}				
 				}else{
 					if (ibv_post_send(eqp, &sr, &bad_wr)) {
 						fprintf(stderr, "failed to post UMR WR!\n");
@@ -627,12 +624,12 @@ int main(int argc, char **argv)
 							fprintf(stderr, "rank%d failed to read CQ!\n", myrank);
 							goto EXIT_DESTROY_EQP;
 						}else ne_sum = ne + ne_sum;
-					//	printf("iter%d rank%d ne is %d\n",i, myrank, ne);
+						if(dbg)	printf("iter%d rank%d ne is %d ne_sum is %d\n",i, myrank, ne, ne_sum);
 				
 					} while (ne_sum < sglist_num);
 					//} while (ne < sglist_num);
 					for(j=0; j<sglist_num; j++){
-					//	fprintf(stderr, "iter%d rank%d Work completion status is:%s ID is %d.\n",i, myrank, ibv_wc_status_str(nwc[j].status), nwc[j].wr_id);
+						if(dbg) fprintf(stderr, "iter%d rank%d Work completion status is:%s ID is %d.\n",i, myrank, ibv_wc_status_str(nwc[j].status), nwc[j].wr_id);
 						if (nwc[j].status != IBV_WC_SUCCESS) {
 							fprintf(stderr, "rank%d failed to execute WR!\n", myrank);
 							fprintf(stderr, "rank%d Work completion status is:%s ID is %d.\n", myrank, ibv_wc_status_str(nwc[j].status), nwc[j].wr_id);
@@ -663,12 +660,11 @@ int main(int argc, char **argv)
 					fprintf(stderr, "rank%d UMR Work completion status is:%s.", myrank, ibv_wc_status_str(ewc.status));
 					goto EXIT_DESTROY_EQP;
 				}
-				if(dbg) MPI_Barrier(MPI_COMM_WORLD);
 			}
 			if (myrank) {
 				//if(dbg){
 				// receiver verifies the buffer
-				if((test == UMR_W) && dbg) MPI_Barrier(MPI_COMM_WORLD);
+				MPI_Barrier(MPI_COMM_WORLD);
 				buf = (test == SR_COPY) ? (unsigned char *)buf_sg : (unsigned char *)buf_umr;
 				c = 0x01;
 				if(dbg){
@@ -704,6 +700,7 @@ int main(int argc, char **argv)
 					if (tick < min_tick) min_tick = tick;
 					if (tick > max_tick) max_tick = tick;
 				}
+				MPI_Barrier(MPI_COMM_WORLD);
 			}
 		}// end of iteration
 
