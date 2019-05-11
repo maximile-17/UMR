@@ -23,7 +23,10 @@
 
 
 
-非连续数据通信卸载测试报告
+
+
+智能网卡卸载MPI非连续数据通信测试报告
+
 
 
 
@@ -39,130 +42,272 @@
 ?
 目 录
 1	概述	4
-1.1	非连续数据通信背景及介绍	4
-1.2	MPI DDT介绍	4
-1.3	网卡非连续数据通信支持	4
-1.3.1	通信方式	4
-1.3.2	数据描述	4
-1.4	网卡卸载方案	5
-1.4.1	单边0-copy	5
-1.4.2	双边0-copy	5
-2	测试目的	5
-2.1	人工pack性能	5
-2.2	网卡卸载性能	5
-2.2.1	Sg_list	5
-2.2.2	UMR	5
-2.3	MPI实现方式	5
-2.3.1	OpenMPI	5
-2.3.2	MVAPICH2	5
-2.4	真实应用效果	5
-3	测试计划	7
-3.1	pack开销占比	7
-3.1.1	vector size	7
-3.1.2	process number	7
-3.2	SGRS(sg_list) VS copy	7
-3.2.1	双边Pack	7
-3.2.2	gather-write	7
-3.2.3	multi-write	7
-3.2.4	双边-SGRS	7
-3.3	2dfft_MPI DDT	7
-3.3.1	OpenMPI	7
-3.3.2	MVAPICH2	7
-3.4	DDTbench	7
-3.4.1	7个科学计算的典型benchmark	7
-3.5	UMR性能测试	7
-3.5.1	Mellanox CX-5 copy VS sge VS UMR	7
-3.5.2	非对称数据分布	7
-3.5.3	容量对比	7
-4	实验环境	9
-5	实验结果	9
-5.1	Pack与通信占比	9
-5.2	2dfft_MPI DDT	9
-5.3	DDTbench	9
-5.4	SGRS(sg_list) VS copy	9
-5.5	UMR性能测试分析	9
-5.5.1	Mellanox CX-5 copy VS sge VS UMR	9
-5.5.2	非对称数据分布	9
-5.5.3	容量对比	9
-6	结论	10
-7	参考文献	10
+1.1	非连续数据通信背景	4
+1.2	MPI DDT [3] [4]	4
+1.2.1	MPI层函数接口	4
+1.2.2	参数含义	4
+1.2.3	常见数据分布	5
+1.2.4	MPI DDT的实现过程	5
+1.2.5	DDT问题	5
+1.3	网卡非连续数据通信支持	5
+1.3.1	通信方式	5
+1.3.2	数据描述	6
+1.4	网卡卸载方案	7
+1.4.1	单边0-copy	7
+1.4.2	双边0-copy	8
+2	测试目的	8
+2.1	人工拷贝性能	8
+2.2	网卡卸载性能	8
+3	测试计划	9
+3.1	MPI DDT测试	9
+3.1.1	2D FFT	9
+3.1.2	Micro-Application Benchmark [2]	10
+3.2	Sg_list测试	10
+3.2.1	单边测试	10
+3.2.2	双边测试	11
+3.3	UMR测试	11
+3.3.1	对称数据分布	11
+3.3.2	非对称数据分布	12
+3.3.3	容量对比	12
+3.3.4	应用测试	12
+4	实验环境	12
+5	实验结果	13
+5.1	MPI DDT	13
+5.1.1	2D FFT	13
+5.1.2	DDTBench	15
+5.2	Sg_list	17
+5.2.1	单边测试	18
+5.2.2	双边测试	19
+5.3	UMR	20
+5.3.1	对称数据分布	20
+5.3.2	非对称数据分布	21
+5.3.3	容量对比	22
+5.3.4	应用测试	24
+6	结论	24
+6.1	MPI DDT	24
+6.2	Verbs层	24
+7	参考文献	25
 1	概述
-1.1	非连续数据通信背景及介绍
-非连续数据通信在
-1.2	MPI DDT介绍
+1.1	非连续数据通信背景
+非连续数据通信是指在发送端发送位于不同地址的多块数据，在接收端将接收到的连续数据分放到非连续的多个地址，这种对于多个非连续数据块的通信在科学计算应用中十分常见，如多节点的2-D FFT（Fast Fourier Transform）[1]并行计算中，在进行不同维度的计算前需要将各自节点上的多块非连续数据发送到其他节点的多个不同的位置，矩阵的转置和2D、3D、4D矩阵的子矩阵传输也涉及到非连续数据的通信[2]，非连续数据通信使用频繁，其通信性能对众多科学计算应用有重要的影响。
+1.2	MPI DDT [3] [4]
+MPI提供了一种用户可以自定义衍生数据类型（Derived DataType，DDT）的机制，用户使用MPI_Type_vector、MPI_Type_indexed、MPI_Type_struct等函数接口传入对应的非连续数据分布描述（count，length，stride，old datatype）和要创建的自定义类型名newtype，可以分别创建符合vector、index、struct等数据分布的新数据类型newtype，在调用MPI_Type_Commit（newtype）之后，就可以在以后的程序中，直接使用newtype完成自定义数据类型的数据通信。
+下文对创建自定义数据类型的函数接口MPI_Type_vector、MPI_Type_indexed、MPI_Type_struct和对应的典型的vector、index、struct数据分布做简单的介绍，并对MPI DDT的实现过程和存在问题做简要分析。
+1.2.1	MPI层函数接口
+ 
+注 1.2 1 MPI DDT接口
+1.2.2	参数含义
+其中，count表示非连续数据块的数量，blocklength表示每个数据块中数据的长度，stride/array_of_displacements表示每个数据块的固定间隔或者位置，oldtype/array_of_type表示每个数据块所包含的数据类型，newtype表示要创建的新数据类型的指针。
+1.2.3	常见数据分布
+1）vector类型：每个非连续数据块所包含的数据类型一致、数据长度一致，非连续数据块之间的间隔一致。
+2）index类型：每个非连续数据块所包含的数据类型一致、数据长度可以不一致，非连续数据块之间的间隔可以不一致。
+3）struct类型：每个非连续数据块所包含的数据类型和数据长度都可以不一致，非连续数据块之间的间隔可以不一致。
+以上三种数据分布是MPI DDT中常见的三种基本描述，描述复杂度和使用灵活性逐渐增加，此外还有其他的类型，如subarray类型用于描述子数组等。新创建的数据类型可以直接用于点对点或者集合通信的数据传输，亦可以作为子类型来创建更加复杂的数据类型。
+1.2.4	MPI DDT的实现过程
+对于用户定义的DDT，首先，根据用户描述的数据分布，MPI对用户提供的数据描述进行Normalization[5] [6]，Normalization的目的是在存储数据类型描述开销和访问数据类型描述开销之间进行平衡，获得优化后的数据描述（同一种数据分布可以有多种描述方式）用于数据类型的使用。在使用DDT进行数据传输时，在没有硬件加速的情况下，MPI使用内存拷贝的方式根据数据分布描述和起始地址，发送端将多个非连续的数据块拷贝到一个连续数据块，然后进行发送，接收端在接收到连续的数据后，根据数据分布和起始地址将数据拷贝到多个非连续的地址。
+不同MPI实现对不同MPI数据分布在Normalization阶段的具体做法有所差异，根据Normalization结果进行数据拷贝的开销也有所不同，对于同样的数据描述，不同MPI实现性能也会有差异[4]。
+1.2.5	DDT问题
+使用MPI DDT进行数据通信，可以给用户提供简洁的调用接口，方便用户编写含有非连续数据通信的程序，但是MPI DDT本身在进行DDT创建、Normalization、内存拷贝时存在开销，很多用户会选择人工的数据搬移而不引入创建MPI DDT的开销，除去MPI DDT机制的开销，使用内存拷贝的方式，当每个数据块的长度很大时，内存拷贝的开销变得更加显著，因此，近些年利用RDMA技术进行非连续数据的0-copy传输成为一种提高非连续数据通信性能的重要选择，以Mellanox公司为代表的智能网卡在这方面也提供了技术支持。
 1.3	网卡非连续数据通信支持
 1.3.1	通信方式
-send/receive、read/write
+目前，RDMA技术支持的两种通信方式分别为send/receive和read/write。其中，send/receive方式，需要接收端ibv_post_recv，发送端ibv_post_send，两边都需要ibv_poll_cq检查向网卡发送的work request是否完成；read/write方式，发起操作的一端需要知道对端的地址，然后ibv_post_send操作为read/write的work request，仅在发送端ibv_poll_cq即可。
 1.3.2	数据描述
-Sg_list、UMR
+1.	Sg_list
+在verbs层进行非连续数据通信时，verbs提供了sg_list机制用于描述通信的多个非连续数据，sg_list为ibv_sge的链表，每个ibv_sge含有描述数据分布的地址、长度和key，sg_list作为send_wr或者recv_wr结构体中的一部分下发到网卡。
+ 
+注 1.33 1 sg_list相关数据结构
+	注意：使用sg_list在send/receive方式下进行通信时，要求发送端和接收端的ibv_sge数量一致、接收端的length值大于等于发送端的length值（大于的部分不会填充数据），意味着收、发端每个ibv_sge描述的数据长度相等才能保证通信的正确性；在read/write方式下进行通信时，操作发起端的work request中含有sg_list，从对端的读出或者写入的数据是连续的。
+2.	UMR[7]
+	UMR（User-Model Memory Registration）是Mellanox自ConnectX-4起提供的功能，这一功能特性允许发送端和接收端含有各个数据块数据长度不同的分布数据，支持send/receive、read/write进行收、发端0-copy的数据通信，UMR允许使用多个非连续的MR（Memory Region）中的数据块生成一个MR，UMR的生成需要调用ibv_exp_post_send完成，向网下发的work request结构为ibv_exp_send_wr，其中含有UMR结构体，UMR结构体中包含众多数据分布的描述（见下文1.3-2代码），网卡在完成地址绑定之后，用户在向网卡下发通信work request时，ibv_send_wr和ibv_recv_wr中的sg_list仅需要一项便可以描述非连续数据的分布。
+ 
+注 1.33 2 UMR相关数据结构
+参数说明：
+exp_opcode填写为IBV_EXP_WR_UMR_FILL表明为UMR创建操作。
+umr_type表示UMR可以是MR list的方式（用于生成UMR的各个MR中的数据分布无规律），也可以是repeat block方式即MR包含重复的相同分布。
+    memory_objects用于描述用于生成UMR的多个MR的key的信息
+    exp_access表示生成的UMR访问权限
+    modified_mr表示要生成的UMR
+    base_addr表示UMR的基地址
+    num_mrs表示用于生成UMR的MR数量
+    ibv_exp_mem_region包含每个MR中数据的起始地址，每个MR的指针，每个MR中数据的长度
 1.4	网卡卸载方案
 1.4.1	单边0-copy
-1.	基于Read/Write+copy
+1.	基于Read/Write
+	在网卡提供sg_list支持的情况下，文章[8]提出使用基于单边操作的Read/Write+单边Copy的方式，以Write+Copy方式为例，发送端使用sg_list描述本地的非连续数据分布，使用RDMA Write操作将数据写到接收端的连续地址，接收端将连续的数据再根据本地的需要Copy到不同的地址。这种方法劣势在于仅能实现一端的数据0-copy。
 1.4.2	双边0-copy
-1.	基于Send/Recv和sg_list——SGRS
-2.	基于UMR（User-Model Memory Registration）
+1.	基于sg_list
+	文章[9]提出SGRS（Sender Gather Receiver Scatter）实现发送端和接收端的0-copy，即在send/receive通信方式下，收、发端都使用sg_list，发送端网卡根据sg_list将多个非连续的数据Gather发出，接收端网卡根据sg_list将接收到的数据Scatter到对应地址，与单边的Read/write操作相比，减少了一端拷贝开销，双边实现0-copy。
+	这种方法劣势在于非连续数据的分布受收、发端sg_list的限制：其一，每个ibv_send_wr或者ibv_recv_wr中sg_list所包含的ibv_sge数量很小，如ConnectX-5支持的最大数量为30，当非连续数据块数量超过30时，则需要分布到多个work request中，多次post work request；其二，收、发两端的sg_list链表中的ibv_sge数量要一致，每个ibv_sge中数据长度要一致，即收、发端数据块数量和每个数据块的数据长度要求一致，然而在科学计算中，很多应用收、发端数据块的数量、每个数据块的长度经常不一致，如矩阵转置、交叉数据（FFT）等。基于sg_list单边0-copy的方式也有同样的劣势。
+2.	基于UMR
+	文章[7]中提出使用UMR的特性来加速MPI DDT，UMR支持send/receive方式的0-copy，也支持read/write方式的0-copy。相比于基于sg_list方式，使用UMR有两点优势：其一，灵活性，UMR允许收、发端数据块的数量不一致，每个数据块的数据长度不一致，只要收、发端描述的通信数据总量一致即可；其二，数据描述容量，ConnectX-5最多支持65536个MR生成一个UMR，一个UMR对应的非连续数据可以在一个ibv_sge中描述，这样，一个ibv_send_wr或者ibv_recv_wr最多可以完成65536*30个非连续数据块的通信。
+	但是，在使用UMR之前，收、发端都必须向网卡下发ibv_exp_send_wr来生成UMR，这一过程会产生一定的开销。
 2	测试目的
-2.1	人工pack性能
-为寻找到切实有用的性能提升点，在工作中，使用OSU基准测试[1]详细测试了Huawei 1822网卡与Mellanox ConnextX-5网卡在基本性能上的差异，找到性能差异项和有较大卸载价值的工作，作为1822卸载加速的着眼点。
+2.1	人工拷贝性能
+为确定在非连续数据通信中， MPI DDT作为一种便于用户使用的接口性能如何，使用人工拷贝数据的方式会带来多大的开销，我们用典型的应用进行测试，对比使用MPI DDT和人工拷贝数据的性能差异，明确数据拷贝在整个通信过程中的开销占比。
 2.2	网卡卸载性能
-2.2.1	Sg_list
-2.2.2	UMR
-2.3	MPI实现方式
-2.3.1	OpenMPI
-2.3.2	MVAPICH2
-2.4	真实应用效果
-根据已有网卡的特性，结合MPI的实现机制和应用特点，从中发现网卡在MPI通信中可以卸载的两方面重要工作：（1）使用网卡完成MPI TM（tag matching）操作，减少CPU查询TM链表开销，提高通信计算的重叠；（2）使用网卡完成MPI DDT（Derived Data Type）的卸载，减少CPU内存拷贝，提高通信性能。针对这两方面可以卸载的工作，对Mellanox网卡的相关特性进行了详尽的测试，为Huawei 1822网卡卸载MPI通信提供了一定的技术方向。
+	在明确数据拷贝占据明显的开销后，测试多种网卡卸载非连续数据通信的性能与人工拷贝的性能差异。明确基于人工拷贝、sg_list、UMR三种实现方式完成非连续数据通信的优势和不足，为Huawei 1822网卡卸载非连续数据通信提供技术方向。
 3	测试计划
-3.1	pack开销占比
-3.1.1	vector size
-3.1.2	process number
-3.2	SGRS(sg_list) VS copy
-3.2.1	双边Pack
-3.2.2	gather-write
-3.2.3	multi-write
-3.2.4	双边-SGRS
-3.3	2dfft_MPI DDT
-3.3.1	OpenMPI
-3.3.2	MVAPICH2
-3.4	DDTbench
-3.4.1	7个科学计算的典型benchmark
-3.5	UMR性能测试
-3.5.1	Mellanox CX-5 copy VS sge VS UMR
-3.5.2	非对称数据分布
-3.5.3	容量对比
-
-
-从四个方面对比Huawei 1822和Mellanox CX5的区别，（1）OSU基准测试[1]，其中包含点对点以及单边通信的带宽延迟基础测试；（2）对比利用硬件卸载Tag-Matching与软件卸载对大消息Rendezvous[2]协议进行卸载性能差异；（3）测试计算Compute和Communicate的交叠程度，该指标高可以说明计算和通信的流水比较好，通信可以及时为计算供应数据，且不阻塞计算过程；（4）测试对比使用单边、双边0-copy方式完成非连续数据通信的性能差别、灵活性、优劣。
-表格 1.2 1 测试计划
-	Huawei 1822	Mellanox CX5
-MPI版本	?	mvapich2-2.3rc2
-?	openmpi-3.1.0	?	mvapich2-2.3rc2
-?	openmpi-3.1.0
-OSU benchmark	?	osu-micro-benchmarks-5.4.2	?	osu-micro-benchmarks-5.4.2
-TM & RNDV offload	?	不支持	?	硬件卸载TM 
-?	软件卸载MLNX HPC-X[3]
-C&C Overlap	?	MadMPI benchmark 0.2(ICPP’16)[4]	?	MadMPI benchmark 0.2(ICPP’16)
-UMR	?	不支持	?	支持
-Sg_list	?	支持	?	支持
-4	实验环境
-5	实验结果
-5.1	Pack与通信占比
-5.2	2dfft_MPI DDT
-5.3	DDTbench
+3.1	MPI DDT测试
+	在非连续数据通信中MPI DDT为用户提供了简单方便的接口，然而MPI在创建并使用DDT过程中必然会引入一定的开销，不同MPI的实现版本也会产生影响。下面的测试将在2D FFT应用和典型的非连续数据访问模式下，测试使用不同MPI DDT与人工拷贝数据的性能。
+3.1.1	2D FFT
+	2D FFT计算过程中，涉及到x、y两个维度的FFT计算，每个进程在完成本地数据的x维度FFT计算后，需要在进程之间交换数据，并且将数据排列成y维度的顺序，这里需要进行图（a）所示的非连续数据通信，然后进行y维度的数据计算，在计算完成后，还要恢复成最初的数据顺序，需要进行图（b）所示的再一次非连续数据通信。[1]
  
-5.4	SGRS(sg_list) VS copy
-5.5	UMR性能测试分析
-5.5.1	Mellanox CX-5 copy VS sge VS UMR
-5.5.2	非对称数据分布
-5.5.3	容量对比
-Kml max_sge
+图 3.1-1 （a） 2D FFT计算阶段非连续数据通信
+ 
+图 3.1-1 （b） 2D FFT恢复顺序阶段非连续数据通信
+	测试中分别使用OpenMPI和MVAPICH2两种MPI实现，在不同数据量大小和不同进程数量的情况下，测试人工拷贝、使用MPI DDT通信的性能差异，明确人工拷贝方式在整个通信过程中的开销占比。
+3.1.2	Micro-Application Benchmark [2]
+	文章[2]中对天气模拟、量子力学、地震波传播等7个科学计算应用进行分析，对其中常用的非连续数据访问模式进行了总结，将其分为三类，如图3.1-2所示：（a）笛卡尔数据交换，如WRF（Weather Research and Forecasting）、NAS_MG（NASA Advanced Supercomputing）、MILC（MIMD Lattice Computation）（b）非结构化数据访问，如LAMMPS（Molecular Dynamics Application）、SPECFEM3D_GLOBE（Spectral-element simulation of global seismic wave propagation in 3D Earth models）（c）交叉数据或者转置，如FFT、SPECFEM3D_GLOBE。根据典型的应用，文中总结出Micro-Application DDT Benchmark，后文称DDTBench用于DDT性能的测试。
+  
+（a）Cartesian Face Exchange e.g., WRF, NAS MG, NAS LU, MILC
+ 			 
+（b）Unstructured Access					（c）Interleaved or Transpose
+e.g., LAMMPS, SPECFEM3D_cm 			e.g., FFT, SPECFEM3D_GLOBE
+图 3.1-2 科学计算中三种常用非连续数据访问模式
+	在该项目中，使用DDTBench进行Micro-Application级别的测试，对比OpenMPI和MVAPICH2、以及手工打包的性能差异。
+3.2	Sg_list测试
+	该部分进行IB verbs级测试，包含单边测试和双边测试，单边测试完成发送端Gather离散数据后发送、接收端接收连续数据的通信，双边测试完成发送端Gather离散数据后发送、接收端接收连续数据后Scatter到离散地址的通信。在进行Gather/Scatter数据时，有人工拷贝数据和网卡根据sg_list直接读写两种方式。
+3.2.1	单边测试
+1.	Gather Write
+	在发送端使用sg_list由网卡直接进行RDMA Write操作，实现发送端0-copy，直接将数据写到接收端的连续空间。
+2.	Copy Write
+	发送端使用人工拷贝数据的方式，将非连续数据拷贝到连续的空间，然后执行RDMA Write操作，将数据写到接收端的连续空间。
+3.	Linked Write
+	针对多个非连续数据块，建立对应数量的链接，并创建每个链接的WR，单次POST后由NIC批量处理，实现单边的0-copy。
+4.	Multiple Write
+	针对多个非连续数据块，使用一个链接，创建多个WR，每个WR分别POST，实现单边的0-copy。
+3.2.2	双边测试
+1.	Send Receive Copy
+	发送端将非连续数据拷贝到连续的空间然后执行发送，接收端在收到连续的数据后，将数据拷贝到非连续的空间，需要双边拷贝。
+2.	SGRS
+	发送端和接收端使用完全相同的sg_list，由网卡根据sg_list的描述直接进行数据收发，实现双边0-copy
+3.3	UMR测试
+	该部分的测试在IB verbs级别，测试均为双边非连续数据通信测试。通过对UMR的了解，发现UMR可以完成sg_list能支持的所有功能，除此之外，UMR在数据分布灵活性和数据描述容量方面有明显的优势，下文的测试主要对比UMR、sg_lsit、copy的性能，突出UMR相对于sg_lsit的性能优劣。
+3.3.1	对称数据分布
+	当发送端、接收端的数据分布对称时，即发送端、接收端的数据块数量、每个数据块长度一致，在仅使用一次POST的情况下，分别测试双边人工拷贝数据（send/receive方式）、双边使用sg_lsit（send/receive方式）、双边使用UMR（send/receive方式），在不同数据块数量，不同数据块长度的情况下对比三种实现方式的性能差异。
+3.3.2	非对称数据分布
+	当发送端、接收端的数据分布不一致，但通信的数据总量相等时，测试双边使用人工拷贝（send/receive方式）和双边使用UMR（send/receive和write方式）的性能差异。
+3.3.3	容量对比
+	在使用sg_list时，由于一个WR含有的ibv_sge数量受限，当数据块的数量超过max_sge时，需要执行多次POST，而使用UMR允许大量的数据块在一次POST WR中完成，本次测试注重对比数据块数量很大的情况下，使用sg_lsit和UMR进行双边数据分布对称情况下非连续数据通信的性能差异。
+3.3.4	应用测试
+
+
+
+
+
+4	实验环境
+	实验环境一：中国科学院计算所的两个节点，配置如下：
+表格 4 1 环境一
+Mellanox CX5
+?	操作系统版本：CentOS7.5.1804 
+?	内核版本：3.10.9-862.11.6
+?	HCA固件版本：16.22.1020
+?	软件环境：MLNX_OFED_LINUX-4.3-3.0.2.1
+MPI版本：mvapich2-2.3rc2、openmpi-3.1.0
+CPU：Intel? Xeon E5-2620 v4 2.10GHz 16 CPUs
+	实验环境二：华为北研所的两个节点，配置如下：
+表格 4 2 环境二
+Mellanox CX5
+?	操作系统版本：SUSE Linux Enterprise Server 11 SP3  
+?	内核版本：3.0.76-0.11
+?	HCA固件版本：12.20.1010
+?	软件环境：MLNX_OFED_LINUX-4.4-2.0.7.0
+MPI版本：mvapich2-2.3.1、openmpi-4.0.0
+CPU：Intel? Xeon E5-2699 v3 2.30GHz 72 CPUs
+5	实验结果
+5.1	MPI DDT
+5.1.1	2D FFT
+	在实验环境二下，测试不同矩阵大小、不同进程数量、使用MPI DDT和人工拷贝情况下2D FFT应用的整体时间开销。
+	图5.1-1为OpenMPI和MVAPICH2测试结果，该测试使用2个节点，每个节点8个进程，二维矩阵宽度（矩阵为n*n方阵，宽度为n）为40000个元素，每个元素包含实部和虚部两个double类型数据，节点内部Share Memory，No DDT表示人工pack/unpack数据，send DDT表示仅使用发送端MPI DDT，recv DDT表示仅使用接收端MPI DDT，S&R DDT表示收、发端均使用MPI DDT。图中可以看出使用MPI DDT对2DFFT性能影响很大，人工pack/unpack性能最好，MVAPICH2相比于OpenMPI在2DFFT计算中有明显的优势，OpenMPI在接收端使用DDT会导致性能明显的下降，这与2DFFT中接收端的数据分布有关，接收端需要将来自每个其他节点的数据以元素为单位放置到离散的位置。
+ 
+图5.1-1 OpenMPI VS MVAPICH2 16 ranks
+	图5.1-2 (a)、(b)分别为OpenMPI和MVAPICH2测试结果，该测试使用2节点，每个节点1进程，二维矩阵宽度为48个元素到10240个元素，测试不同数据量情况对OpenMPI和MVAPICH2两种实现的性能影响。从（a）中可以看出，使用人工pack/unpack的方式性能一直优于使用MVAPICH2 DDT的性能，随着数据量变大，收、发端均使用DDT的总时间是人工pack/unpack总时间的3倍左右。从图（b）中可以看出，在数据量较小（矩阵宽度小于160个元素）时，使用OpenMPI DDT有略微的优势，但是随着数据量增加，使用DDT会导致性能急剧下降，当矩阵宽度为2560元素时，使用OpenMPI DDT的总时间是人工pack/unpack总时间的136倍，DDT开销巨大。综合（a）、（b）可知，不同MPI实现方式，对相同数据分布的DDT策略有明显差异，就2DFFT应用两种MPI实现对比而言，MVAPICH2 DDT性能稳定，在数据量较大时有明显的优势，而OpenMPI DDT性能受数据量影响巨大，但是在数据量较小时有优于人工pack/unpack的效果。
+ 
+图5.1-2（a）MVAPICH2 2 ranks
+ 
+图5.1-2（b） OpenMPI 2 ranks
+	图5.1-3为在实验环境一下人工pack/unpack的测试结果，因为使用pcak/unpack性能基本不受MPI实现的影响，我们选择MVAPICH2为例进行测试，为准确分析数据拷贝和通信的开销关系，我们测试了人工pack/unpack和communication在整个2D FFT计算中的开销占比。图(a)以矩阵大小为变量，每个节点使用1个进程，从图中可以发现，随着数据量增大，pack/unpack的开销占比逐渐增大，而纯通信的开销占比逐渐减少，减少人工拷贝的开销成为提高性能的重要方面；图(b)以MPI进程数量为变量，矩阵宽度固定为10000个元素，由图可见，随着进程数量增加，进行通信（Alltoall）的开销占比线性增加，pack/unpack开销浮动在40%左右。综合(a)、(b)可知，与communication相比，pack/unpack开销是影响性能重要的方面，且受数据量影响巨大，减少人工拷贝开销十分重要。
+ 
+   图5.1-3 pack/unpack 开销（a）		      	pack/unpack 开销（b）
+5.1.2		DDTBench
+	DDTBench在实验环境一下进行，分别测试MVAPICH2和OpenMPI使用DDT和人工pack/unpack在整个通信过程中的占比以及通信带宽。
+1.	MVAPICH2
+	图5.1-4为两节点，每个节点8个进程情况下，使用MVAPICH2测试部分DDTBench pack/unpack开销的实验结果，其中横轴单位为K Bytes，纵轴Packing Overhead的计算公式为((latency of pack+unpack)/(latency of communication+pack+unpack))*100，manual表示人工pack/unpack数据，mpi_pack_ddt表示使用MPI_Pack/Unpack接口进行数据pack/unpack。由图可见，MPI提供的接口相比于人工pack/unpack而言，占用更大的开销，尤其在SPECFEM3D_cm（非结构化数据访问）测试下，使用MPI接口的开销高达47%。
+	图5.1-5为两节点，每个节点8个进程情况下，使用MVAPICH2测试部分DDTBench 通信带宽的实验结果，带宽计算公式为2*size/(latency of pack+unpack+communication)，其中mpi_ddt表示直接使用MPI DDT接口创建新的数据类型，mpi_pack_ddt表示使用MPI_Pack/Unpack接口pack/unpack数据，reference表示使用ping+pong方式获得的参考带宽。从图中可见，使用MPI接口的带宽均不及人工pack/unpack数据。
+  
+图5.1-4 pack/unpack 开销
+    
+图5.1-5 pack/unpack 带宽
+	图5.1-6为使用MVAPICH2测试NAS_LU_x（矩阵进行x维度上的数据交换）和WRF_x_vec(矩阵进行x维度上的vector类型数据交换)的结果，由图可知，NAS_LU_x测试，使用MPI接口在pack/unpack开销和带宽上都体现出优势，尤其是使用MPI DDT时，带宽优势明显；WRF_x_vec测试，使用MPI接口在pack/unpack开销和带宽上都不占优势，但是结果与人工pack/unpack比较接近。综上，通信数据在x维度连续时，使用DDT接口，MVAPICH2会做一定的优化，对NAS_LU_x类型的应用会体现出一定优势。
+   
+图5.1-6  MVAPICH2测试NAS_LU_x、WRF_x_vec
+2.	 OpenMPI
+	根据MVAPICH2的测试经验，我们仅对x维度方向有连续数据分布的DDTBench做了OpenMPI的测试，图5.1-7为使用OpenMPI测试NAS_LU_x和WRF_x_vec的结果，由图可知，NAS_LU_x和WRF_x_vec测试，使用OpenMPI DDT接口在pack/unpack开销和带宽上都体现出优势，尤其是使用MPI DDT时，带宽优势明显。
+	综上，通信数据在x维度连续时，使用DDT接口，OpenMPI会做一定的优化，对NAS_LU_x和WRF_x_vec类型的应用会体现出一定优势，且效果超过MVAPICH2。
+
+    
+图5.1-7 OpenMPI测试NAS_LU_x、WRF_x_vec
+5.2	Sg_list
+5.2.1	单边测试
+	单边测试在测试环境一下进行，使用gather write、copy write、linked write、multiple write完成非连续数据写到对端连续空间的操作。数据块数量为30（MLNX CX-5 max_sge），每个数据块之间的间隔为20MB（CPU LLC），每个数据块的大小2 Bytes—1M Bytes，测试了延时和带宽两个指标。
+	图5.2-1为不同数据块大小下，延时性能的测试结果。从图中可见，当数据块大小小于等于128 Bytes时，copy write的方式延时最优；当数据块大小介于128-1024 Bytes时，使用sg_list描述非连续数据的gather write方式最优，当数据量继续增大到8K Bytes之后，gather write、linked write、multiple write延时接近，当数据块大小达到32K Bytes时，单边0-copy方式的延时仅为copy write方式的一半。 
+	图5.2-2为不同数据块大小下，带宽性能的测试结果。从图中可见，当数据块大小小于等于128 Bytes时，copy write的方式带宽最优；当数据块大小介于128-1024 Bytes时，使用sg_list描述非连续数据的gather write方式最优，当数据量继续增大到8K Bytes之后，gather write、linked write、multiple write带宽接近。
+	综上，在数据块大小较小时，拷贝方式最优，数据块大小较大时，使用RDMA Write方式最优，且在数据块数量一定情况下，数据量越大，优势越明显。
+  
+图5.2-1 单边写延时性能
+ 
+图5.2-2 单边写带宽性能
+5.2.2	双边测试
+	双边测试在测试环境二下进行，使用Send Receive Copy和SGRS两种方式测试收、发端均是非连续数据的通信性能。数据块数量为30（MLNX CX-5 max_sge），每个数据块之间的间隔为45MB（CPU LLC），每个数据块的大小2 Bytes—1M Bytes，测试了延时性能。图5.2-3（a）为小消息的延时结果，（b）为大消息的延时结果，可见，当数据量达到128 Bytes之后，使用sg_list进行双边0-copy非连续数据通信有明显的优势。
+  
+图5.2-3（a）小消息延时结果
+ 
+图5.2-3（b）大消息延时结果
+5.3	UMR 
+	关于UMR的测试均在实验环境二下进行。
+5.3.1	对称数据分布
+	收、发端非连续数据的数据块数量均为16，数据块之间的间隔为16M Bytes，每个数据块大小为128-1M Bytes，进行单向的测试。图5.3-1为延时测试结果，数据块大小为128 Bytes的情况下，UMR表现欠佳，随着数据量增加，UMR性能和sg_list性能接近，且优于copy的趋势逐渐明显。
+ 
+图5.3-1（a）UMR小消息延时结果
+ 
+图5.3-1（b）UMR大消息延时结果
+5.3.2	非对称数据分布
+	由于UMR支持收、发端数据分布非对称的非连续数据通信，本小节测试中。发送端数据块的数量是接收端数据块数量的一半，发送端每个数据块大小是接收端每个数据块大小的2倍，进行单向通信，分别测试人工拷贝、UMR（send/receive方式和write方式）的延时性能。图5.3-2（a）、（b）分别为小消息、大消息延时性能的测试结果，可以发现，在发送端数据块大小大于512 Bytes后，相比于人工pack/unpack，使用UMR进行收、发端数据分布不对称的数据通信优势逐渐明显，其中使用UMR Write方式比使用UMR send/receive方式有1-5us的优势。
+ 
+图5.3-2（a） 小消息延时测试结果 
+图5.3-2（b） 大消息延时测试结果
+5.3.3	容量对比
+	MLNX CX-5网卡每个ibv_send_wr支持的最大ibv_sge数量为30，UMR支持的MR数量最大为65536，因此当数据块的数量很大时，使用sg_list方式需要下发多个WR，而使用UMR只需要一个WR即可完成。本小节测试在数据块数量逐渐增大的情况下，对比了基于send/receive方式的sg_list、人工copy、UMR和基于write方式的UMR延时性能，图5.3-3 （a）、（b）、（c）分别为数据块大小为256 Bytes、4K Bytes、64K Bytes的测试结果，测试的数据块数量从16增加到512，数据块之间的间隔为数据块大小的2倍。
+	图（a）可见，在数据块大小与256 Bytes时，基于send/receive方式的copy和sg_list性能接近且一直优于UMR，UMR write方式在数据块数量为16和32时存在弱小优势，当数据块数量大于64之后，UMR性能越来越差。
+	图（b）可见，在数据块大小与4K Bytes时，数据块数量小于等于128时，UMR性能与sg_list性能接近，且优于copy性能；数据块数量大于128之后，UMR性能越来越差，sg_list性能最优，当数据块数量达到512时，UMR性能最差。 
+	图（c）可见，在数据块大小与64K Bytes时，数据块数量小于等于128时，UMR性能与sg_list性能接近，且优于copy性能；数据块数量大于128之后，UMR性能越来越差，sg_list性能最优，copy性能最差。
+ 
+图5.3-3（a） 数据块大小为256 Bytes 延时结果
+ 
+图5.3-3（b） 数据块大小为4K Bytes 延时结果
+ 
+图5.3-3（c） 数据块大小为64K Bytes 延时结果
+5.3.4	应用测试
 6	结论
-
-
-
+6.1	MPI DDT
+	通过5.1.1的测试可见，对于2DFFT这种涉及交叉数据的应用，矩阵在规模较小（矩阵宽度小于160个元素）时，使用OpenMPI DDT有优于人工pack/unpack的略微优势，但是随着数据量增加，使用DDT会导致性能急剧下降；MVAPICH2 DDT性能稳定，一直弱于人工pack/unpack的效果，但在矩阵规模较大的情况下性能明显优于OpenMPI DDT。在2D FFT应用中，pack/unpack开销是影响性能重要的方面，开销占比高达45%，且受矩阵规模影响巨大，减少人工拷贝开销十分重要。
+	通过DDTBench测试可知，对于多数Micro-Application，使用MPI接口的pack/unpack开销和带宽均不及使用人工pack/unpack方式，但是对于部分x维度数据连续的Micro-Application，如NAS_LU_x和WRF_x_vec，使用MPI DDT接口会在pack/unpack开销以及带宽上体现出优于人工pack/unpack方式的优势，并且OpenMPI的优化效果优于MVAPICH2。
+6.2	Verbs层
+	在对sg_list测试中，通过单边写测试，发现使用RDMA Write方式进行单侧非连续数据的0-copy传输，在数据块数量固定为30（MLNX CX-5 max_sge），数据块大小大于128 Bytes之后表现出优于人工拷贝的性能；双边非连续数据通信表现出相似的趋势，在数据块大小到达128 Bytes之后，双边0-copy方式表现出优势。随着数据量的增加，0-copy方式的优势更加明显。
+	在对UMR测试中，根据5.3.1的测试发现，在使用一个WR能完成的收、发端数据分布对称的非连续通信的情况下，使用sg_list与UMR的性能数据几乎相等；根据5.3.2的测试发现，在收、发端数据分布不对称的情况下，在数据块大小大于128 Bytes之后，使用UMR相比于人工拷贝有逐渐明显的优势；根据5.3.3的测试发现，随着数据块数量变大，使用UMR仅需一个WR，使用sg_list需要多个WR，在数据块大小达到4K Bytes时，数据块数量小于128时，使用UMR性能与sg_list性能相近，当数据块数量继续变大后，UMR性能出现急剧下降。	
+	UMR相对于sg_list，在灵活性方面有明显的优势，其一，可以实现收、发端数据分布不对称的非连续数据通信；其二，在数据块的数量变大时，一个UMR能够容纳多达65536（MLNX CX-5）个数据块作为ibv_sge的一项存在于一个WR中，而sg_list最大容纳30（MLNX CX-5）个非连续数据块。在性能方面，在数据量较大时，在一定的数据块数量（小于128）情况下，使用UMR与sg_list性能接近。
+	综上，将类似UMR的功能集成到Huawei 1822网卡可以在卸载MPI非连续数据通信中获得一定的性能提升。 
 7	参考文献
-1. OSU Benchmark: http://mvapich.cse.ohio-state.edu/benchmarks/
-2. ophirmaor. Understanding MPI Tag Matching and Rendezvous Offloads (ConnectX-5). https://community.mellanox.com/docs/DOC-2583
-3. Mellanox HPC-X? Software Toolkit. http://www.mellanox.com/page/products_dyn?product_family=189&mtag=hpc-x
-4. Denis A, Trahay F. MPI overlap: Benchmark and analysis[C]//Parallel Processing (ICPP), 2016 45th International Conference on. IEEE, 2016: 258-267.
+1. Torsten Hoefler, Steven Gottlieb, " Parallel Zero-Copy Algorithms for Fast Fourier
+Transform and Conjugate Gradient using MPI Datatypes," EuroMPI 2010, pp. 132-141.
+2. Timo Schneider, Robert Gerstenberger, Torsten Hoefler, "Micro-applications for Communication Data Access Patterns and MPI Datatypes," EuroMPI 2012, pp. 121-131. 
+3. William Gropp, Torsten Hoefler, Rajeev Thakur, Jesper Larsson Tr?ff, "Performance Expectations and Guidelines for MPI Derived Datatypes," EuroMPI 2011, pp. 150-159.
+4. Qingqing Xiong, Purushotham V. Bangalore, Anthony Skjellum, Martin Herbordt, "MPI Derived Datatypes: Performance and Portability Issues," EuroMPI 2018, pp. 1-10.
+5. Larsson Tr?ff, Jesper, "Optimal MPI Datatype Normalization for Vector and Index-block Types," EuroMPI 2014, pp. 33-38
+6. R. Ganian, M. Kalany, S. Szeider and J. L. Tr?ff, "Polynomial-Time Construction of Optimal MPI Derived Datatype Trees," International Parallel and Distributed Processing Symposium (IPDPS) 2016, pp. 638-647.
+7. M. Li, H. Subramoni, K. Hamidouche, X. Lu and D. K. Panda, "High Performance MPI Datatype Support with User-Mode Memory Registration: Challenges, Designs, and Benefits," International Conference on Cluster Computing (CLUSTER) 2015, pp. 226-235.
+8. J. Wu, P. Wyckoff and Dhabaleswar Panda, "High performance implementation of MPI derived datatype communication over InfiniBand," International Parallel and Distributed Processing Symposium (IPDPS) 2004, pp. 1-14.
+9. Gopalakrishnan Santhanaraman, Jiesheng WuDhabaleswar, K. Panda, “Zero-Copy MPI Derived Datatype Communication over InfiniBand”, EuroPVM/MPI 2004, pp. 47-56.
+
+
 
