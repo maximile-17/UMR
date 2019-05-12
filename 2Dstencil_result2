@@ -1,0 +1,452 @@
+------------------parameters_info-------------------------
+ 	  number of process:  2
+ 		-b, --block_size=      3
+   		-n, --block_num=       3
+ 		-s, --stride=          3
+ 		-W, --iterW=        1000
+ 		-N, --iterN=       10000
+ 		-I, --IBlink=          1
+ 		-E, --Ethlink=         1
+ 		-d, --dbg=             0
+ 		-m, --mtu=          1024
+
+==========Device info & UMR capbilities info:==========
+max_klm_list_size:        65536; 
+max_send_wqe_inline_klms:    20; 
+max_umr_recursion_depth:     4.
+rank1 | device: mlx5_0 | port: 1 | lid: 0 | max sge: 30 | max mr:16777216 | max cqe:4194303 | max qp wr:32768
+
+===================exchange info for rdma qp===================
+rank0_local : LID 0000, QPN 0x14366, PSN 0x6630b1, ID 0, umr_addr 91d008, umr_rkey 4866.
+rank0_remote: LID 0000, QPN 0xe673, PSN 0x5b9683 ,ID 1, umr_addr 9d7008, umr_rkey 5188.
+
+Rank0  local_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb10xb0;
+Rank0 remote_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb20x20
+
+===================exchange info for rdma qp===================
+rank1_local : LID 0000, QPN 0xe673, PSN 0x5b9683, ID 1, umr_addr 9d7008, umr_rkey 5188.
+rank1_remote: LID 0000, QPN 0x14366, PSN 0x6630b1 ,ID 0, umr_addr 91d008, umr_rkey 4866.
+
+Rank1  local_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb20x20;
+Rank1 remote_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb10xb0
+[sr_copy] avg: 3.650 us | min: 2.842 us | max: 18.929 us
+	2   : 2312  (cdf 23.1200%)
+	3   : 6354  (cdf 86.6600%)
+	4   : 16    (cdf 86.8200%)
+	5   : 10    (cdf 86.9200%)
+	6   : 38    (cdf 87.3000%)
+	7   : 1218  (cdf 99.4800%)
+	8   : 1     (cdf 99.4900%)
+	9   : 7     (cdf 99.5600%)
+	10  : 7     (cdf 99.6300%)
+	11  : 34    (cdf 99.9700%)
+	13  : 1     (cdf 99.9800%)
+	15  : 1     (cdf 99.9900%)
+	18  : 1     (cdf 100.0000%)
+[umr] avg: 4.159 us | min: 3.357 us | max: 12.026 us
+	3   : 8651  (cdf 86.5100%)
+	4   : 47    (cdf 86.9800%)
+	5   : 12    (cdf 87.1000%)
+	6   : 8     (cdf 87.1800%)
+	7   : 1213  (cdf 99.3100%)
+	8   : 39    (cdf 99.7000%)
+	9   : 4     (cdf 99.7400%)
+	10  : 9     (cdf 99.8300%)
+	11  : 16    (cdf 99.9900%)
+	12  : 1     (cdf 100.0000%)
+[umr_write ] avg: 2.901 us | min: 2.438 us | max: 14.485 us
+	2   : 9352  (cdf 93.5200%)
+	3   : 162   (cdf 95.1400%)
+	4   : 15    (cdf 95.2900%)
+	5   : 14    (cdf 95.4300%)
+	6   : 422   (cdf 99.6500%)
+	7   : 4     (cdf 99.6900%)
+	8   : 1     (cdf 99.7000%)
+	9   : 3     (cdf 99.7300%)
+	10  : 26    (cdf 99.9900%)
+	14  : 1     (cdf 100.0000%)
+------------------parameters_info-------------------------
+ 	  number of process:  2
+ 		-b, --block_size=      5
+   		-n, --block_num=       5
+ 		-s, --stride=          5
+ 		-W, --iterW=        1000
+ 		-N, --iterN=       10000
+ 		-I, --IBlink=          1
+ 		-E, --Ethlink=         1
+ 		-d, --dbg=             0
+ 		-m, --mtu=          1024
+
+==========Device info & UMR capbilities info:==========
+max_klm_list_size:        65536; 
+max_send_wqe_inline_klms:    20; 
+max_umr_recursion_depth:     4.
+rank1 | device: mlx5_0 | port: 1 | lid: 0 | max sge: 30 | max mr:16777216 | max cqe:4194303 | max qp wr:32768
+
+===================exchange info for rdma qp===================
+rank0_local : LID 0000, QPN 0x14369, PSN 0x9e872d, ID 0, umr_addr 9e5010, umr_rkey 1073741827.
+rank0_remote: LID 0000, QPN 0xe676, PSN 0x76e73d ,ID 1, umr_addr 9e5010, umr_rkey 1073741893.
+
+Rank0  local_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb10xb0;
+Rank0 remote_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb20x20
+
+===================exchange info for rdma qp===================
+rank1_local : LID 0000, QPN 0xe676, PSN 0x76e73d, ID 1, umr_addr 9e5010, umr_rkey 1073741893.
+rank1_remote: LID 0000, QPN 0x14369, PSN 0x9e872d ,ID 0, umr_addr 9e5010, umr_rkey 1073741827.
+
+Rank1  local_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb20x20;
+Rank1 remote_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb10xb0
+[sr_copy] avg: 3.337 us | min: 2.944 us | max: 13.960 us
+	2   : 254   (cdf 2.5400%)
+	3   : 9283  (cdf 95.3700%)
+	4   : 20    (cdf 95.5700%)
+	5   : 23    (cdf 95.8000%)
+	6   : 5     (cdf 95.8500%)
+	7   : 410   (cdf 99.9500%)
+	9   : 1     (cdf 99.9600%)
+	10  : 1     (cdf 99.9700%)
+	11  : 1     (cdf 99.9800%)
+	12  : 1     (cdf 99.9900%)
+	13  : 1     (cdf 100.0000%)
+[umr] avg: 4.030 us | min: 3.398 us | max: 21.739 us
+	3   : 9016  (cdf 90.1600%)
+	4   : 89    (cdf 91.0500%)
+	5   : 12    (cdf 91.1700%)
+	6   : 14    (cdf 91.3100%)
+	7   : 812   (cdf 99.4300%)
+	8   : 46    (cdf 99.8900%)
+	10  : 6     (cdf 99.9500%)
+	11  : 2     (cdf 99.9700%)
+	14  : 1     (cdf 99.9800%)
+	16  : 1     (cdf 99.9900%)
+	21  : 1     (cdf 100.0000%)
+[umr_write ] avg: 2.919 us | min: 2.470 us | max: 9.950 us
+	2   : 9412  (cdf 94.1200%)
+	3   : 93    (cdf 95.0500%)
+	4   : 14    (cdf 95.1900%)
+	5   : 12    (cdf 95.3100%)
+	6   : 435   (cdf 99.6600%)
+	7   : 29    (cdf 99.9500%)
+	8   : 1     (cdf 99.9600%)
+	9   : 4     (cdf 100.0000%)
+------------------parameters_info-------------------------
+ 	  number of process:  2
+ 		-b, --block_size=      7
+   		-n, --block_num=       7
+ 		-s, --stride=          7
+ 		-W, --iterW=        1000
+ 		-N, --iterN=       10000
+ 		-I, --IBlink=          1
+ 		-E, --Ethlink=         1
+ 		-d, --dbg=             0
+ 		-m, --mtu=          1024
+
+==========Device info & UMR capbilities info:==========
+max_klm_list_size:        65536; 
+max_send_wqe_inline_klms:    20; 
+max_umr_recursion_depth:     4.
+rank1 | device: mlx5_0 | port: 1 | lid: 0 | max sge: 30 | max mr:16777216 | max cqe:4194303 | max qp wr:32768
+
+===================exchange info for rdma qp===================
+rank0_local : LID 0000, QPN 0x1436c, PSN 0xa1b5a8, ID 0, umr_addr 9db018, umr_rkey 1073741828.
+rank0_remote: LID 0000, QPN 0xe679, PSN 0xf6cdf2 ,ID 1, umr_addr 9ea018, umr_rkey 1073741894.
+
+Rank0  local_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb10xb0;
+Rank0 remote_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb20x20
+
+===================exchange info for rdma qp===================
+rank1_local : LID 0000, QPN 0xe679, PSN 0xf6cdf2, ID 1, umr_addr 9ea018, umr_rkey 1073741894.
+rank1_remote: LID 0000, QPN 0x1436c, PSN 0xa1b5a8 ,ID 0, umr_addr 9db018, umr_rkey 1073741828.
+
+Rank1  local_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb20x20;
+Rank1 remote_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb10xb0
+[sr_copy] avg: 3.512 us | min: 2.932 us | max: 21.376 us
+	2   : 103   (cdf 1.0300%)
+	3   : 9100  (cdf 92.0300%)
+	4   : 15    (cdf 92.1800%)
+	5   : 23    (cdf 92.4100%)
+	6   : 6     (cdf 92.4700%)
+	7   : 729   (cdf 99.7600%)
+	9   : 6     (cdf 99.8200%)
+	11  : 15    (cdf 99.9700%)
+	13  : 1     (cdf 99.9800%)
+	15  : 1     (cdf 99.9900%)
+	21  : 1     (cdf 100.0000%)
+[umr] avg: 4.074 us | min: 3.590 us | max: 12.009 us
+	3   : 8826  (cdf 88.2600%)
+	4   : 554   (cdf 93.8000%)
+	5   : 19    (cdf 93.9900%)
+	6   : 11    (cdf 94.1000%)
+	7   : 77    (cdf 94.8700%)
+	8   : 507   (cdf 99.9400%)
+	9   : 2     (cdf 99.9600%)
+	10  : 1     (cdf 99.9700%)
+	11  : 2     (cdf 99.9900%)
+	12  : 1     (cdf 100.0000%)
+[umr_write ] avg: 2.944 us | min: 2.597 us | max: 9.584 us
+	2   : 9076  (cdf 90.7600%)
+	3   : 633   (cdf 97.0900%)
+	4   : 16    (cdf 97.2500%)
+	5   : 10    (cdf 97.3500%)
+	6   : 47    (cdf 97.8200%)
+	7   : 215   (cdf 99.9700%)
+	8   : 1     (cdf 99.9800%)
+	9   : 2     (cdf 100.0000%)
+------------------parameters_info-------------------------
+ 	  number of process:  2
+ 		-b, --block_size=      9
+   		-n, --block_num=       9
+ 		-s, --stride=          9
+ 		-W, --iterW=        1000
+ 		-N, --iterN=       10000
+ 		-I, --IBlink=          1
+ 		-E, --Ethlink=         1
+ 		-d, --dbg=             0
+ 		-m, --mtu=          1024
+
+==========Device info & UMR capbilities info:==========
+max_klm_list_size:        65536; 
+max_send_wqe_inline_klms:    20; 
+max_umr_recursion_depth:     4.
+rank1 | device: mlx5_0 | port: 1 | lid: 0 | max sge: 30 | max mr:16777216 | max cqe:4194303 | max qp wr:32768
+
+===================exchange info for rdma qp===================
+rank0_local : LID 0000, QPN 0x1436f, PSN 0xee96c2, ID 0, umr_addr 929020, umr_rkey 1073741829.
+rank0_remote: LID 0000, QPN 0xe67c, PSN 0x844e97 ,ID 1, umr_addr 9e2020, umr_rkey 1073741895.
+
+Rank0  local_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb10xb0;
+Rank0 remote_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb20x20
+
+===================exchange info for rdma qp===================
+rank1_local : LID 0000, QPN 0xe67c, PSN 0x844e97, ID 1, umr_addr 9e2020, umr_rkey 1073741895.
+rank1_remote: LID 0000, QPN 0x1436f, PSN 0xee96c2 ,ID 0, umr_addr 929020, umr_rkey 1073741829.
+
+Rank1  local_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb20x20;
+Rank1 remote_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb10xb0
+[sr_copy] avg: 3.364 us | min: 2.913 us | max: 14.762 us
+	2   : 301   (cdf 3.0100%)
+	3   : 9174  (cdf 94.7500%)
+	4   : 11    (cdf 94.8600%)
+	5   : 20    (cdf 95.0600%)
+	6   : 2     (cdf 95.0800%)
+	7   : 482   (cdf 99.9000%)
+	8   : 1     (cdf 99.9100%)
+	9   : 7     (cdf 99.9800%)
+	12  : 1     (cdf 99.9900%)
+	14  : 1     (cdf 100.0000%)
+[umr] avg: 4.212 us | min: 3.737 us | max: 11.532 us
+	3   : 6233  (cdf 62.3300%)
+	4   : 3194  (cdf 94.2700%)
+	5   : 13    (cdf 94.4000%)
+	6   : 15    (cdf 94.5500%)
+	7   : 5     (cdf 94.6000%)
+	8   : 535   (cdf 99.9500%)
+	9   : 2     (cdf 99.9700%)
+	10  : 2     (cdf 99.9900%)
+	11  : 1     (cdf 100.0000%)
+[umr_write ] avg: 3.362 us | min: 2.828 us | max: 10.569 us
+	2   : 4171  (cdf 41.7100%)
+	3   : 5028  (cdf 91.9900%)
+	4   : 10    (cdf 92.0900%)
+	5   : 27    (cdf 92.3600%)
+	6   : 2     (cdf 92.3800%)
+	7   : 757   (cdf 99.9500%)
+	8   : 1     (cdf 99.9600%)
+	9   : 2     (cdf 99.9800%)
+	10  : 2     (cdf 100.0000%)
+------------------parameters_info-------------------------
+ 	  number of process:  2
+ 		-b, --block_size=     11
+   		-n, --block_num=      11
+ 		-s, --stride=         11
+ 		-W, --iterW=        1000
+ 		-N, --iterN=       10000
+ 		-I, --IBlink=          1
+ 		-E, --Ethlink=         1
+ 		-d, --dbg=             0
+ 		-m, --mtu=          1024
+
+==========Device info & UMR capbilities info:==========
+max_klm_list_size:        65536; 
+max_send_wqe_inline_klms:    20; 
+max_umr_recursion_depth:     4.
+rank1 | device: mlx5_0 | port: 1 | lid: 0 | max sge: 30 | max mr:16777216 | max cqe:4194303 | max qp wr:32768
+
+===================exchange info for rdma qp===================
+rank0_local : LID 0000, QPN 0x14372, PSN 0x563522, ID 0, umr_addr 91c028, umr_rkey 1073741830.
+rank0_remote: LID 0000, QPN 0xe67f, PSN 0x7b6c0f ,ID 1, umr_addr 91a028, umr_rkey 1073741896.
+
+Rank0  local_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb10xb0;
+Rank0 remote_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb20x20
+
+===================exchange info for rdma qp===================
+rank1_local : LID 0000, QPN 0xe67f, PSN 0x7b6c0f, ID 1, umr_addr 91a028, umr_rkey 1073741896.
+rank1_remote: LID 0000, QPN 0x14372, PSN 0x563522 ,ID 0, umr_addr 91c028, umr_rkey 1073741830.
+
+Rank1  local_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb20x20;
+Rank1 remote_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb10xb0
+[sr_copy] avg: 4.067 us | min: 3.019 us | max: 15.237 us
+	3   : 8110  (cdf 81.1000%)
+	4   : 3     (cdf 81.1300%)
+	5   : 13    (cdf 81.2600%)
+	6   : 6     (cdf 81.3200%)
+	7   : 1810  (cdf 99.4200%)
+	8   : 1     (cdf 99.4300%)
+	9   : 5     (cdf 99.4800%)
+	10  : 6     (cdf 99.5400%)
+	11  : 42    (cdf 99.9600%)
+	12  : 1     (cdf 99.9700%)
+	14  : 2     (cdf 99.9900%)
+	15  : 1     (cdf 100.0000%)
+[umr] avg: 5.149 us | min: 4.181 us | max: 21.360 us
+	4   : 8314  (cdf 83.1400%)
+	5   : 4     (cdf 83.1800%)
+	6   : 7     (cdf 83.2500%)
+	7   : 14    (cdf 83.3900%)
+	8   : 1643  (cdf 99.8200%)
+	9   : 3     (cdf 99.8500%)
+	10  : 5     (cdf 99.9000%)
+	11  : 5     (cdf 99.9500%)
+	12  : 3     (cdf 99.9800%)
+	15  : 1     (cdf 99.9900%)
+	21  : 1     (cdf 100.0000%)
+[umr_write ] avg: 3.982 us | min: 3.172 us | max: 11.802 us
+	3   : 8590  (cdf 85.9000%)
+	4   : 32    (cdf 86.2200%)
+	5   : 12    (cdf 86.3400%)
+	6   : 10    (cdf 86.4400%)
+	7   : 1344  (cdf 99.8800%)
+	8   : 1     (cdf 99.8900%)
+	9   : 4     (cdf 99.9300%)
+	10  : 6     (cdf 99.9900%)
+	11  : 1     (cdf 100.0000%)
+------------------parameters_info-------------------------
+ 	  number of process:  2
+ 		-b, --block_size=     13
+   		-n, --block_num=      13
+ 		-s, --stride=         13
+ 		-W, --iterW=        1000
+ 		-N, --iterN=       10000
+ 		-I, --IBlink=          1
+ 		-E, --Ethlink=         1
+ 		-d, --dbg=             0
+ 		-m, --mtu=          1024
+
+==========Device info & UMR capbilities info:==========
+max_klm_list_size:        65536; 
+max_send_wqe_inline_klms:    20; 
+max_umr_recursion_depth:     4.
+rank1 | device: mlx5_0 | port: 1 | lid: 0 | max sge: 30 | max mr:16777216 | max cqe:4194303 | max qp wr:32768
+
+===================exchange info for rdma qp===================
+rank0_local : LID 0000, QPN 0x14375, PSN 0xc6a27a, ID 0, umr_addr 9e6030, umr_rkey 1073741831.
+rank0_remote: LID 0000, QPN 0xe682, PSN 0xf3d086 ,ID 1, umr_addr 90d030, umr_rkey 1073741897.
+
+Rank0  local_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb10xb0;
+Rank0 remote_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb20x20
+
+===================exchange info for rdma qp===================
+rank1_local : LID 0000, QPN 0xe682, PSN 0xf3d086, ID 1, umr_addr 90d030, umr_rkey 1073741897.
+rank1_remote: LID 0000, QPN 0x14375, PSN 0xc6a27a ,ID 0, umr_addr 9e6030, umr_rkey 1073741831.
+
+Rank1  local_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb20x20;
+Rank1 remote_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb10xb0
+[sr_copy] avg: 3.693 us | min: 2.963 us | max: 12.605 us
+	2   : 32    (cdf 0.3200%)
+	3   : 8827  (cdf 88.5900%)
+	4   : 12    (cdf 88.7100%)
+	5   : 16    (cdf 88.8700%)
+	6   : 6     (cdf 88.9300%)
+	7   : 1076  (cdf 99.6900%)
+	9   : 5     (cdf 99.7400%)
+	10  : 5     (cdf 99.7900%)
+	11  : 20    (cdf 99.9900%)
+	12  : 1     (cdf 100.0000%)
+[umr] avg: 5.305 us | min: 4.463 us | max: 239.205 us
+	4   : 8531  (cdf 85.3100%)
+	5   : 148   (cdf 86.7900%)
+	6   : 1     (cdf 86.8000%)
+	7   : 29    (cdf 87.0900%)
+	8   : 970   (cdf 96.7900%)
+	9   : 311   (cdf 99.9000%)
+	10  : 1     (cdf 99.9100%)
+	11  : 5     (cdf 99.9600%)
+	12  : 1     (cdf 99.9700%)
+	13  : 1     (cdf 99.9800%)
+	16  : 1     (cdf 99.9900%)
+	239 : 1     (cdf 100.0000%)
+[umr_write ] avg: 4.375 us | min: 3.517 us | max: 21.617 us
+	3   : 8384  (cdf 83.8400%)
+	4   : 64    (cdf 84.4800%)
+	6   : 21    (cdf 84.6900%)
+	7   : 1310  (cdf 97.7900%)
+	8   : 213   (cdf 99.9200%)
+	10  : 3     (cdf 99.9500%)
+	11  : 2     (cdf 99.9700%)
+	12  : 1     (cdf 99.9800%)
+	15  : 1     (cdf 99.9900%)
+	21  : 1     (cdf 100.0000%)
+------------------parameters_info-------------------------
+ 	  number of process:  2
+ 		-b, --block_size=     15
+   		-n, --block_num=      15
+ 		-s, --stride=         15
+ 		-W, --iterW=        1000
+ 		-N, --iterN=       10000
+ 		-I, --IBlink=          1
+ 		-E, --Ethlink=         1
+ 		-d, --dbg=             0
+ 		-m, --mtu=          1024
+
+==========Device info & UMR capbilities info:==========
+max_klm_list_size:        65536; 
+max_send_wqe_inline_klms:    20; 
+max_umr_recursion_depth:     4.
+rank1 | device: mlx5_0 | port: 1 | lid: 0 | max sge: 30 | max mr:16777216 | max cqe:4194303 | max qp wr:32768
+
+===================exchange info for rdma qp===================
+rank0_local : LID 0000, QPN 0x14378, PSN 0xbd9a81, ID 0, umr_addr 9d6038, umr_rkey 1073741832.
+rank0_remote: LID 0000, QPN 0xe685, PSN 0x11ee26 ,ID 1, umr_addr 91b038, umr_rkey 1073741898.
+
+Rank0  local_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb10xb0;
+Rank0 remote_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb20x20
+
+===================exchange info for rdma qp===================
+rank1_local : LID 0000, QPN 0xe685, PSN 0x11ee26, ID 1, umr_addr 91b038, umr_rkey 1073741898.
+rank1_remote: LID 0000, QPN 0x14378, PSN 0xbd9a81 ,ID 0, umr_addr 9d6038, umr_rkey 1073741832.
+
+Rank1  local_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb20x20;
+Rank1 remote_gid: 0xfe0x80: 0 0: 0 0: 0 0:0x260x8a:0x70xff:0xfe0xb1:0xb10xb0
+[sr_copy] avg: 3.578 us | min: 2.974 us | max: 13.598 us
+	2   : 13    (cdf 0.1300%)
+	3   : 9160  (cdf 91.7300%)
+	4   : 7     (cdf 91.8000%)
+	5   : 22    (cdf 92.0200%)
+	6   : 2     (cdf 92.0400%)
+	7   : 766   (cdf 99.7000%)
+	8   : 2     (cdf 99.7200%)
+	9   : 9     (cdf 99.8100%)
+	10  : 1     (cdf 99.8200%)
+	11  : 16    (cdf 99.9800%)
+	12  : 1     (cdf 99.9900%)
+	13  : 1     (cdf 100.0000%)
+[umr] avg: 5.683 us | min: 4.866 us | max: 13.198 us
+	4   : 1225  (cdf 12.2500%)
+	5   : 7402  (cdf 86.2700%)
+	6   : 5     (cdf 86.3200%)
+	7   : 22    (cdf 86.5400%)
+	8   : 6     (cdf 86.6000%)
+	9   : 1330  (cdf 99.9000%)
+	11  : 7     (cdf 99.9700%)
+	12  : 2     (cdf 99.9900%)
+	13  : 1     (cdf 100.0000%)
+[umr_write ] avg: 4.935 us | min: 3.932 us | max: 12.739 us
+	3   : 429   (cdf 4.2900%)
+	4   : 7641  (cdf 80.7000%)
+	5   : 5     (cdf 80.7500%)
+	6   : 20    (cdf 80.9500%)
+	7   : 2     (cdf 80.9700%)
+	8   : 1886  (cdf 99.8300%)
+	10  : 14    (cdf 99.9700%)
+	11  : 2     (cdf 99.9900%)
+	12  : 1     (cdf 100.0000%)
