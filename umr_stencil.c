@@ -271,8 +271,8 @@ int main(int argc, char **argv)
 	local_conn.psn = lrand48() & 0xffffff;
 	local_conn.myid = myrank;
   	/*message for RDMA write: address and rkey*/
-  	local_conn.addr = ((uintptr_t)buf_cp);//+ ((strow-1)/2)*sizeof(double);//(uintptr_t)buf_umr;
-  	local_conn.rkey = mr->rkey;
+  	local_conn.addr = ((uintptr_t)buf_umr) + ((strow-1)/2)*sizeof(double);//(uintptr_t)buf_umr;
+  	local_conn.rkey = modify_mr->rkey;
 	//ethernet link must have gid
 	if(parameters.Ethlink){
 		if(ibv_query_gid(dev_ctx, 1, 0, &mygid)){
@@ -389,8 +389,8 @@ int main(int argc, char **argv)
 		}
 	}
 	// bench S/G performance of send/recv
-//	for (int test = SGRS; test < TEST_END; test++) {
-	int test; test = SGRS;{
+	for (int test = SR_COPY; test < TEST_END; test++) {
+	//int test; test = SGRS;{
 		struct ibv_send_wr *bad_wr;
 		struct ibv_recv_wr *bad_rr;
 		struct ibv_wc wc;
@@ -515,23 +515,23 @@ int main(int argc, char **argv)
 			}
 		} else {
 			// sender prepares the send request
-			if((test == SR_COPY)){
+			if((test == SR_COPY) || ((test == SGRS) && (sglist_num == 1))){
 				sr = (const struct ibv_send_wr){ 0 };
 				sr.wr_id      = WR_ID;
-				sr.sg_list    = sg_list;
-				sr.num_sge    = 1;
+				sr.sg_list    = (test == SGRS) ? esg_list : sg_list;
+				sr.num_sge    = (test == SGRS) ? strow : 1;
 				sr.opcode     = IBV_WR_SEND;
 				sr.send_flags = IBV_SEND_SIGNALED;
 			} else if(test == SGRS) {
-				sr = (const struct ibv_send_wr){ 0 };
-				sr.wr_id = WR_ID;
-				sr.sg_list = esg_list;
-				sr.num_sge = strow; 
-				sr.opcode = IBV_WR_RDMA_WRITE;
-				sr.send_flags = IBV_SEND_SIGNALED;
-				sr.wr.rdma.remote_addr = remote_conn.addr;
-				sr.wr.rdma.rkey = remote_conn.rkey;
-
+				for (i=0; i<sglist_num; i++ ){
+					nsr[i] = (const struct ibv_send_wr){ 0 };
+					nsr[i].wr_id = WR_ID+i+1;
+					nsr[i].next = (i == (sglist_num-1)) ? NULL : &nsr[i+1];
+					nsr[i].sg_list = &esg_list[strow*i];
+					nsr[i].num_sge = strow; 
+					nsr[i].opcode = IBV_WR_SEND;
+					nsr[i].send_flags = IBV_SEND_SIGNALED;
+				}
 			}else{
 				//TODO:  need use UMR
 				sr = (const struct ibv_send_wr){ 0 };
@@ -555,11 +555,16 @@ int main(int argc, char **argv)
 		for (i = 0; i < (parameters.iterN + parameters.iterW); i++) {
 			if (myrank) {
 				// post receive WR
-				if((test == SR_COPY)){
+				if((test == SR_COPY) || ((test == SGRS) && (sglist_num == 1))){
 					if (ibv_post_recv(qp, &rr, &bad_rr)) {
 						fprintf(stderr, "failed to post receive WR!\n");
 						goto EXIT_DESTROY_EQP;
 					}
+				}else if(test == SGRS) {
+						if (ibv_post_recv(qp, &nrr[0], &bad_rr)) {
+							fprintf(stderr, "SGRS failed to post %dst receive WR!\n",j);
+							goto EXIT_DESTROY_EQP;
+						}
 				}else if(test == UMR){
 					if (ibv_post_recv(eqp, &rr, &bad_rr)) {
 						fprintf(stderr, "failed to post UMR receive WR!\n");
@@ -585,22 +590,27 @@ int main(int argc, char **argv)
 				}		
 
 				// post send WR
-				if((test == SR_COPY)){
+				if((test == SR_COPY) || ((test == SGRS) && (sglist_num == 1))){
 					if (ibv_post_send(qp, &sr, &bad_wr)) {
 						fprintf(stderr, "failed to post WR!\n");
 						goto EXIT_DESTROY_EQP;
 					}	
 				} else if(test == SGRS) {
-						if (ibv_post_send(qp, &sr, &bad_wr)) {
+						if (ibv_post_send(qp, &nsr[0], &bad_wr)) {
 							fprintf(stderr, "SGRS failed to post %dst send WR!\n",i);
 							goto EXIT_DESTROY_EQP;
 						}
 						
+				}else{
+					if (ibv_post_send(eqp, &sr, &bad_wr)) {
+						fprintf(stderr, "failed to post UMR WR!\n");
+						goto EXIT_DESTROY_EQP;
+					}
 				}
 			}
 
 			// poll the CQ
-			if((test == SR_COPY)){
+			if((test == SR_COPY) || ((test == SGRS) && (sglist_num == 1))){
 				do ne = ibv_poll_cq(cq, 1, &wc); while (ne == 0);
 				if (ne < 0) {
 					fprintf(stderr, "rank%d failed to read CQ!\n", myrank);
@@ -611,6 +621,28 @@ int main(int argc, char **argv)
 					fprintf(stderr, "rank%d Work completion status is:%s", myrank, ibv_wc_status_str(wc.status));
 					goto EXIT_DESTROY_EQP;
 				}
+			} else if(test == SGRS) {
+//				if(myrank){
+					do {
+						ne = ibv_poll_cq(cq, sglist_num-ne_sum, &nwc[ne_sum]);
+						if (ne < 0) {
+							fprintf(stderr, "rank%d failed to read CQ!\n", myrank);
+							goto EXIT_DESTROY_EQP;
+						}else ne_sum = ne + ne_sum;
+						if(dbg)	printf("iter%d rank%d ne is %d ne_sum is %d\n",i, myrank, ne, ne_sum);
+				
+					} while (ne_sum < sglist_num);
+					//} while (ne < sglist_num);
+					for(j=0; j<sglist_num; j++){
+						if(dbg) fprintf(stderr, "iter%d rank%d Work completion status is:%s ID is %d.\n",i, myrank, ibv_wc_status_str(nwc[j].status), nwc[j].wr_id);
+						if (nwc[j].status != IBV_WC_SUCCESS) {
+							fprintf(stderr, "rank%d failed to execute WR!\n", myrank);
+							fprintf(stderr, "rank%d Work completion status is:%s ID is %d.\n", myrank, ibv_wc_status_str(nwc[j].status), nwc[j].wr_id);
+							goto EXIT_DESTROY_EQP;
+						}	
+					}
+					ne_sum = 0;
+//				}
 			}else if(test == UMR){
 				do ne = ibv_exp_poll_cq(ecq, 1, &ewc, sizeof(ewc)); while (ne ==0);
 				if (ne < 0) {
@@ -622,18 +654,15 @@ int main(int argc, char **argv)
 					fprintf(stderr, "rank%d UMR Work completion status is:%s", myrank, ibv_wc_status_str(ewc.status));
 					goto EXIT_DESTROY_EQP;
 				}
-			}else if( (!myrank)){
-				if(test == UMR_W){ 
-				do ne = ibv_exp_poll_cq(ecq, 1, &ewc, sizeof(ewc)); while (ne ==0);}
-				else{
-				do ne = ibv_poll_cq(cq, 1, &wc); while (ne == 0);}
+			}else if((test == UMR_W) && (!myrank)){
+				do ne = ibv_exp_poll_cq(ecq, 1, &ewc, sizeof(ewc)); while (ne ==0);
 				if (ne < 0) {
-					fprintf(stderr, "rank%d failed to read %s CQ!\n", myrank,(test == SGRS)?"SGRS":"UMR_W");
+					fprintf(stderr, "rank%d failed to read UMR CQ!\n", myrank);
 					goto EXIT_DESTROY_EQP;
 				}
-				if (((test == SGRS)? wc.status : ewc.status) != IBV_WC_SUCCESS) {
-					fprintf(stderr, "rank%d failed to execute %s WR!\n", myrank,(test == SGRS)?"SGRS":"UMR_W");
-					fprintf(stderr, "rank%d %s Work completion status is:%s.", myrank,(test == SGRS)?"SGRS":"UMR_W", ibv_wc_status_str((test == SGRS)? wc.status : ewc.status));
+				if (ewc.status != IBV_WC_SUCCESS) {
+					fprintf(stderr, "rank%d failed to execute UMR WR!\n", myrank);
+					fprintf(stderr, "rank%d UMR Work completion status is:%s.", myrank, ibv_wc_status_str(ewc.status));
 					goto EXIT_DESTROY_EQP;
 				}
 			}
@@ -641,8 +670,8 @@ int main(int argc, char **argv)
 				//if(dbg){
 				// receiver verifies the buffer
 				MPI_Barrier(MPI_COMM_WORLD);
-				buf = (double *)buf_cp;
-				c = 1.0;
+				buf = (test == SR_COPY) ? (double *)buf_cp : (double *)buf_umr;
+				c = 0x01;
 				if(dbg){
 				printf("[%s] ", (test == SGRS) ? "sgrs" : ((test == UMR) ? "umr" : ((test == UMR_W) ? "umr_write " : "sr_copy")));
 				printf("================received buf data===============\n");
@@ -657,10 +686,7 @@ int main(int argc, char **argv)
 					}
 					printf("\n");
 				}
-				if(test == SGRS)
-				for (j = 0; j < (2*strow-1); j++){
-					printf("%f ", buf[j]);
-				}
+
 				printf("\n================================================\n");}
 //				for (m = 0; m < parameters.block_num;  m++) {
 //					for (n = 0; n < parameters.block_size; n++) {
@@ -682,14 +708,6 @@ int main(int argc, char **argv)
 					for(j = 0; j<(strow-1)/2; j++)
 						memcpy((j+(strow-1)/2+1)*xdim*sizeof(double) + (unsigned char *)buf_umr + ((strow-1)/2) * sizeof(double), (unsigned char *)buf_cp+(strow+(strow-1)/2+j)*sizeof(double), sizeof(double));
 				}
-				if (test == SGRS) {
-					for(j = 0; j<(strow-1)/2; j++)
-						memcpy(j*xdim*sizeof(double) + (unsigned char *)buf_umr + ((strow-1)/2) * sizeof(double), (unsigned char *)buf_cp+j*sizeof(double), sizeof(double));
-					memcpy(j*xdim*sizeof(double) + (unsigned char *)buf_umr, (unsigned char *)buf_cp+j*sizeof(double), strow * sizeof(double));
-					for(j = 0; j<(strow-1)/2; j++)
-						memcpy((j+(strow-1)/2+1)*xdim*sizeof(double) + (unsigned char *)buf_umr + ((strow-1)/2) * sizeof(double), (unsigned char *)buf_cp+(strow+(strow-1)/2+j)*sizeof(double), sizeof(double));
-				}
-
 
 				// finish timing at sender side
 				tick = rdtsc() - tick;
