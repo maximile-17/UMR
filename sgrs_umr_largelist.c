@@ -552,13 +552,7 @@ int main(int argc, char **argv)
 							fprintf(stderr, "SGRS failed to post %dst receive WR!\n",j);
 							goto EXIT_DESTROY_EQP;
 						}
-				//	for(j=0; j<sglist_num; j++){
-				//		if (ibv_post_recv(qp, &nrr[j], &bad_rr)) {
-				//			fprintf(stderr, "SGRS failed to post %dst receive WR!\n",j);
-				//			goto EXIT_DESTROY_EQP;
-				//		}
-				//	}
-				}else if(test == UMR){
+						}else if(test == UMR){
 					if (ibv_post_recv(eqp, &rr, &bad_rr)) {
 						fprintf(stderr, "failed to post UMR receive WR!\n");
 						goto EXIT_DESTROY_EQP;
@@ -590,12 +584,7 @@ int main(int argc, char **argv)
 							fprintf(stderr, "SGRS failed to post %dst send WR!\n",i);
 							goto EXIT_DESTROY_EQP;
 						}
-				//	for(j=0; j<sglist_num; j++){
-				//		if (ibv_post_send(qp, &nsr[j], &bad_wr)) {
-				//			fprintf(stderr, "SGRS failed to post %dst send WR!\n",i);
-				//			goto EXIT_DESTROY_EQP;
-				//		}
-				//	}				
+						
 				}else{
 					if (ibv_post_send(eqp, &sr, &bad_wr)) {
 						fprintf(stderr, "failed to post UMR WR!\n");

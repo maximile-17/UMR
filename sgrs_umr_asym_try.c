@@ -83,6 +83,12 @@ int main(int argc, char **argv)
 	}
 	/////////////////////////////////////////////////////////////
 
+	//compare block number with max_sge
+	if (parameters.block_num > dev_attr.max_sge) {
+		parameters.block_num = dev_attr.max_sge;
+		if(myrank == 0)
+		printf("block_num is bigger than the device's max_sge,reset equal to max_sge:%d\n",dev_attr.max_sge);
+	}
 	// check the port
 	if (ibv_query_port(dev_ctx, IB_PORT, &port_attr)) {
 		fprintf(stderr, "failed to query port!\n");
@@ -357,7 +363,8 @@ int main(int argc, char **argv)
 		printf("\n================================================\n");
 	}
 	// bench S/G performance of send/recv
-	for(int test = SR_COPY; test < TEST_END; test++)
+		int test;
+		test = UMR;
 		{
 		struct ibv_send_wr *bad_wr;
 		struct ibv_recv_wr *bad_rr;
@@ -401,7 +408,14 @@ int main(int argc, char **argv)
 			if (test == SR_COPY) break;
 		}
 
-	
+		// prepare the S/G entries for buf_umr
+		memset(esg_list, 0, sizeof(struct ibv_sge) * parameters.block_num);
+		for (i = 0; i < parameters.block_num; i++) {
+			esg_list[i].addr   = ((uintptr_t)buf_umr) + i * parameters.stride;
+			esg_list[i].length = parameters.block_size;
+			esg_list[i].lkey   = emr[i]->lkey;
+		}
+
 		// prepare memory region list
 		memset(&mem_reg_list[0], 0, sizeof(ibv_exp_mem_region)*mr_num);	
 		for(i=0; i<mr_num; i++){
@@ -570,34 +584,34 @@ int main(int argc, char **argv)
 					fprintf(stderr, "rank%d UMR Work completion status is:%s", myrank, ibv_wc_status_str(ewc.status));
 					goto EXIT_DESTROY_EQP;
 				}
+				if(dbg) MPI_Barrier(MPI_COMM_WORLD);
 			}
-			if (myrank) {
+			if (myrank && dbg) {
 				// receiver verifies the buffer
-				MPI_Barrier(MPI_COMM_WORLD);
+				if((test == UMR_W) && (dbg)) MPI_Barrier(MPI_COMM_WORLD);
 				buf = ((test != UMR)&&(test != UMR_W)) ? (unsigned char *)buf_sg : (unsigned char *)buf_umr;
 				c = 0x01;
-				if(dbg){
 				printf("[%s] ", (test == SGRS) ? "sgrs" : ((test == UMR) ? "umr" : ((test == UMR_W) ? "umr_write " : "sr_copy")));
 				printf("================received buf data===============\n");
 				for (j = 0; j < buf_size; j++){
 					printf("%x ", buf[j]);
 				}
-				printf("\n================================================\n");}
-				for (m = 0; m < mr_num;  m++) {
-					for (n = 0; n < parameters.block_size/2; n++) {
-						j = (test != SR_COPY) ? (m * parameters.stride/2 + n) : (m * parameters.block_size/2 + n);
-						if (buf[j] != c) {
-							fprintf(stderr, "failed to verify the received data @%d!\n", j);
-							break;
-						}
-					}
-					if(m % 2) c++;
-				}
+				printf("\n================================================\n");
+			//	for (m = 0; m < parameters.block_num;  m++) {
+			//		for (n = 0; n < parameters.block_size; n++) {
+			//			j = (test != SR_COPY) ? (m * parameters.stride + n) : (m * parameters.block_size + n);
+			//			if (buf[j] != c) {
+			//				fprintf(stderr, "failed to verify the received data @%d!\n", j);
+			//				break;
+			//			}
+			//		}
+			//		c++;
+			//	}
 			} else {
 				// copy the buffer
 				if (test == SR_COPY) {
-					for (j = 0; j < 2*parameters.block_num; j++) {
-						memcpy((unsigned char *)buf_cp + j * parameters.stride/2, (unsigned char *)buf_sg + j * parameters.block_size/2, parameters.block_size/2);
+					for (j = 0; j < parameters.block_num; j++) {
+						memcpy((unsigned char *)buf_cp + j * parameters.stride, (unsigned char *)buf_sg + j * parameters.block_size, parameters.block_size);
 					}
 				}
 
@@ -608,7 +622,6 @@ int main(int argc, char **argv)
 					if (tick < min_tick) min_tick = tick;
 					if (tick > max_tick) max_tick = tick;
 				}
-				MPI_Barrier(MPI_COMM_WORLD);
 			}
 		}// end of iteration
 

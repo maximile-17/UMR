@@ -4,8 +4,18 @@
  * Memcory Copy
  * User-model Memory Registration
  */
-#include "sgrs_umr.h"
 
+/*
+ * data memset, data check, sg_list had been changed
+ * SR_COPY use buf_sg mr
+ * SGRS use buf_umr emr
+ * UMR and UMR_W use the same buf as SGRS
+ */
+
+#include "sgrs_umr.h"
+static inline int idx2d(int x, int y, int dim){
+	return x+y*dim;
+}
 int main(int argc, char **argv)
 {
 	int myrank, numprocs;
@@ -18,15 +28,16 @@ int main(int argc, char **argv)
 	MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
 
 	struct params parameters;
-	parameters.block_size =  BLOCK_SZ;
- 	parameters.block_num = BLOCK_N;
-	parameters.stride = STRIDE;
+	parameters.block_size =  BLOCK_SZ;//x-d size
+ 	parameters.block_num = BLOCK_N;//y-d size
+	parameters.stride = STRIDE;//stencil rows
   	parameters.iterW = WITER;
   	parameters.iterN = NITER;
 	parameters.IBlink = 1;
 	parameters.Ethlink = 0;  
 	parameters.mtu = 1024;
 	parameters.dbg = 0;
+	int xdim,ydim,strow;
 	int sglist_num = 1;
 	int last_sge_num = 0;
 	int mr_num = 1;
@@ -38,12 +49,14 @@ int main(int argc, char **argv)
 		goto EXIT_MPI_FINALIZE;
 	}
 	dbg = parameters.dbg;
-	int imr;// for mr variable
-	/*rank 0: sender   mr number = block_num
-	* rank 1:receiver  mr number = 2*block_num
-	*/
-	mr_num = (!myrank) ? parameters.block_num : 2*parameters.block_num;
-	struct ibv_mr *emr[mr_num];
+	xdim = parameters.block_size;
+	ydim = parameters.block_num;
+	strow = parameters.stride;
+	//mr
+	int imr;
+	mr_num = ydim;
+	struct ibv_mr *emr[mr_num];//for UMR
+	struct ibv_mr *cmr[mr_num];//for cp
 	struct ibv_exp_create_mr_in  create_mr_in;
 	// initialize random number generator
 	srand48(getpid()*time(NULL));
@@ -83,6 +96,21 @@ int main(int argc, char **argv)
 	}
 	/////////////////////////////////////////////////////////////
 
+	//compare block number with max_sge
+	//TODO:compute sglist_num
+	sglist_num = (xdim-strow+1)*(ydim-strow+1);
+	//if (parameters.block_num > dev_attr.max_sge) {
+	//	sglist_num = mr_num / dev_attr.max_sge;
+	//	last_sge_num = mr_num % dev_attr.max_sge;
+	//	if(last_sge_num != 0) sglist_num++;
+	//	if(myrank == 0)
+	//		printf("block_num is bigger than the device's max_sge, \nSGRS needs %d WR with max_age(%d), another WR with %d sg entries.\n"\
+	//	,sglist_num-1, dev_attr.max_sge, last_sge_num);
+	//}
+
+	struct ibv_send_wr      nsr[sglist_num];
+	struct ibv_recv_wr      nrr[sglist_num];
+
 	// check the port
 	if (ibv_query_port(dev_ctx, IB_PORT, &port_attr)) {
 		fprintf(stderr, "failed to query port!\n");
@@ -95,8 +123,8 @@ int main(int argc, char **argv)
 
 	// print some device info
 	if(myrank)
-		printf("rank%d | device: %s | port: %d | lid: %u | max sge: %d\n",
-	        myrank, ibv_get_device_name(dev), IB_PORT, port_attr.lid, dev_attr.max_sge);
+		printf("rank%d | device: %s | port: %d | lid: %u | max sge: %d | max mr:%d | max cqe:%d | max qp wr:%d\n",
+	        myrank, ibv_get_device_name(dev), IB_PORT, port_attr.lid, dev_attr.max_sge, dev_attr.max_mr, dev_attr.max_cqe, dev_attr.max_qp_wr);
 
 	// allocate protection domain
 	pd = ibv_alloc_pd(dev_ctx);
@@ -107,12 +135,12 @@ int main(int argc, char **argv)
 
 	// allocate memory buffers
 	//buf_size = parameters.stride * dev_attr.max_sge;
-	buf_size = parameters.stride * parameters.block_num;
-	if (posix_memalign(&buf_sg, sysconf(_SC_PAGESIZE), buf_size)) {
+	buf_size = xdim * ydim *sizeof(double);
+	if (posix_memalign(&buf_sg, sysconf(_SC_PAGESIZE), strow*strow*buf_size)) {
 		fprintf(stderr, "failed to allocate S/G buffer!\n");
 		goto EXIT_DEALLOC_PD;
-	}
-	if (posix_memalign(&buf_cp, sysconf(_SC_PAGESIZE), buf_size)) {
+	}//as reveive buffer
+	if (posix_memalign(&buf_cp, sysconf(_SC_PAGESIZE), (2*strow-1)*sglist_num*sizeof(double))) {
 		fprintf(stderr, "failed to allocate copy buffer!\n");
 		goto EXIT_FREE_BUF;
 	}
@@ -122,20 +150,21 @@ int main(int argc, char **argv)
 	}
 
 	// register the S/G buffer for RDMA
-	mr = ibv_reg_mr(pd, buf_sg, buf_size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
+	mr = ibv_reg_mr(pd, buf_cp, (2*strow-1)*sglist_num*sizeof(double), IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
 	if (!mr) {
 		fprintf(stderr, "failed to set up MR!\n");
 		goto EXIT_FREE_BUF;
 	}
 
-	// create mrs, but number of mr is different between sender and receiver 
+	// create block_num mrs
+	// TODO: compute mr params;  comfirm imr number
 	for(imr=0; imr<mr_num; imr++){
-		emr[imr] = (!myrank) ? ibv_reg_mr(pd, (void *)((uint64_t)(uintptr_t)buf_umr + imr * parameters.stride), parameters.block_size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE) : ibv_reg_mr(pd, (void *)((uint64_t)(uintptr_t)buf_umr + imr * parameters.stride/2), parameters.block_size/2, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
+		emr[imr] = ibv_reg_mr(pd, (void *)((uint64_t)(uintptr_t)buf_umr + imr * xdim * sizeof(double)), xdim*sizeof(double), IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
 		if (!emr[imr]) {
-		fprintf(stderr, "myrank%d failed to set up %dst MR for UMR!\n",myrank, imr);
+		fprintf(stderr, "failed to set up %dst MR for UMR!\n", imr);
 		goto EXIT_DEREG_MR;
 		}
-	}
+	} 
 	// create the completion queue
 	cq = ibv_create_cq(dev_ctx, CQ_DEPTH, NULL, NULL, 0);
 	if (!cq) {
@@ -178,6 +207,7 @@ int main(int argc, char **argv)
 	};
 	////////////////////////exp/////////////////////
 	// create modify mr
+	// TODO: add params;  comfirm imr number
 	memset(&create_mr_in, 0, sizeof(create_mr_in));
 	create_mr_in.pd = pd;
 	create_mr_in.attr.max_klm_list_size = mr_num;//max number of entries
@@ -201,6 +231,7 @@ int main(int argc, char **argv)
 		fprintf(stderr, "failed to allocate mkey_list_memory!\n");
 		goto EXIT_DESTROY_MODIFYMR;
 	}
+
 
 	// create the exp_qp
 	//TODO: comfirm what comp_mask used for 
@@ -240,8 +271,8 @@ int main(int argc, char **argv)
 	local_conn.psn = lrand48() & 0xffffff;
 	local_conn.myid = myrank;
   	/*message for RDMA write: address and rkey*/
-  	local_conn.addr = (uintptr_t)buf_umr;
-  	local_conn.rkey = modify_mr->rkey;
+  	local_conn.addr = ((uintptr_t)buf_cp);//+ ((strow-1)/2)*sizeof(double);//(uintptr_t)buf_umr;
+  	local_conn.rkey = mr->rkey;
 	//ethernet link must have gid
 	if(parameters.Ethlink){
 		if(ibv_query_gid(dev_ctx, 1, 0, &mygid)){
@@ -342,26 +373,28 @@ int main(int argc, char **argv)
 		goto EXIT_DESTROY_EQP;
 	}
 
-	if(myrank && dbg){
-		unsigned char c;
+	if(!myrank && dbg){
+		double c;
 		int i,j;
-		c = 0x01;
-		memset(buf_cp, 0x00, buf_size);
-		unsigned char *buf = (unsigned char *)buf_cp;
-		for (i = 0; i < parameters.block_num; i++) 
-			memset(buf + i * parameters.stride, c++, parameters.block_size);
+		c = 1.0;
+		memset(buf_umr, 0x00, buf_size);
+		double *buf = (double *)buf_umr;
 		printf("================original buf data===============\n");
-			for (j = 0; j < buf_size; j++){
-				printf("%x ", buf[j]);
+		for (i = 0; i < ydim; i++){
+			for (j = 0; j < xdim; j++) {
+				buf[i*xdim+j]=c++;
+				printf("%f ", buf[i*xdim+j]);
 			}
-		printf("\n================================================\n");
+			printf("\n");
+		}
 	}
 	// bench S/G performance of send/recv
-	for(int test = SR_COPY; test < TEST_END; test++)
-		{
+//	for (int test = SGRS; test < TEST_END; test++) {
+	int test; test = SGRS;{
 		struct ibv_send_wr *bad_wr;
 		struct ibv_recv_wr *bad_rr;
 		struct ibv_wc wc;
+		struct ibv_wc nwc[sglist_num+1];
 		struct ibv_exp_wc ewc;
 		struct ibv_exp_send_wr *bad_esr;//for umr
 		struct ibv_exp_mem_region  mem_reg_list[mr_num];
@@ -369,49 +402,58 @@ int main(int argc, char **argv)
 		
  		struct ibv_sge list;
 
-		unsigned char *buf;
+		double *buf;
 
 		uint64_t tick;
 		uint64_t ticks[parameters.iterN];
 
 		int i, j, m, n;
-		int ne;
-		unsigned char c;
+		int ne, ne_sum;
+		double c;
 		umr_length = 0;
-
+		ne_sum = 0;
 		// prepare the buffers
-		memset(buf_sg, 0x00, buf_size); 
-		memset(buf_cp, 0x00, buf_size);
+		memset(buf_sg, 0x00, strow*strow*buf_size); 
+		memset(buf_cp, 0x00, (2*strow-1)*sglist_num*sizeof(double));
 		memset(buf_umr, 0x00, buf_size);
-		c = 0x01;
+		c = 1.0;
 		if (0 == myrank) {
-			buf = (test == SGRS) ? (unsigned char *)buf_sg : (((test == UMR)||(test == UMR_W)) ? (unsigned char *)buf_umr : (unsigned char *)buf_cp);
-			for (i = 0; i < parameters.block_num; i++) {
-				memset(buf + i * parameters.stride, c++, parameters.block_size);
+			buf = (double *)buf_umr;
+			for (i = 0; i < ydim; i++)
+				for (j = 0; j < xdim; j++) 
+					buf[i*xdim+j]=c++;
+		}
+
+		// prepare the S/G entries for SR_COPY
+		memset(sg_list, 0, sizeof(struct ibv_sge) * sglist_num);
+		for (i = 0; i < sglist_num; i++) {
+			if (test == SR_COPY){ 
+			sg_list[i].addr   = ((uintptr_t)buf_cp) + i*(2*strow-1)*sizeof(double);
+			sg_list[i].length = (2*strow-1)*sizeof(double);
+			sg_list[i].lkey   = mr->lkey;
 			}
 		}
 
-		// prepare the S/G entries
-		memset(sg_list, 0, sizeof(struct ibv_sge) * parameters.block_num);
-		for (i = 0; i < parameters.block_num; i++) {
-			sg_list[i].addr   = ((uintptr_t)buf_sg) + i * parameters.stride;
-			sg_list[i].length = (test == SGRS) ? parameters.block_size : parameters.block_size * parameters.block_num;
-			sg_list[i].lkey   = mr->lkey;
-
-			if (test == SR_COPY) break;
+		// prepare the S/G entries for SGRS about buf_umr
+		memset(esg_list, 0, sizeof(struct ibv_sge) * sglist_num * strow);
+//		for(i=0;i<(ydim-strow+1);i++)
+//			for(j=0;j<(xdim-strow+1);j++){
+//				esg_list
+		for (i = 0; i < strow; i++) {
+			esg_list[i].addr   = (i == strow/2) ? ((uintptr_t)buf_umr) + i * xdim * sizeof(double) : ((uintptr_t)buf_umr) + ((strow-1)/2)*sizeof(double)+i * xdim * sizeof(double);
+			esg_list[i].length = (i == strow/2) ? strow*sizeof(double) : sizeof(double);
+			esg_list[i].lkey   = emr[i]->lkey;
 		}
 
-	
 		// prepare memory region list
-		memset(&mem_reg_list[0], 0, sizeof(ibv_exp_mem_region)*mr_num);	
-		for(i=0; i<mr_num; i++){
-			mem_reg_list[i].base_addr = (uint64_t)(uintptr_t)emr[i]->addr;
+		memset(&mem_reg_list[0], 0, sizeof(ibv_exp_mem_region)*strow);	
+		for(i=0; i<strow; i++){
+			mem_reg_list[i].base_addr =  (i == strow/2) ? ((uintptr_t)buf_umr) + i * xdim * sizeof(double) : ((uintptr_t)buf_umr) + ((strow-1)/2)*sizeof(double)+i * xdim * sizeof(double);
 			mem_reg_list[i].mr = emr[i];
-			mem_reg_list[i].length = emr[i]->length;
+			mem_reg_list[i].length = (i == strow/2) ? strow*sizeof(double) : sizeof(double);
 			umr_length += mem_reg_list[i].length;
 		}
 		// create UMR
-
 		esr = (const struct ibv_exp_send_wr){ 0 };
 		esr.exp_opcode     = IBV_EXP_WR_UMR_FILL;
 		esr.exp_send_flags = IBV_EXP_SEND_SIGNALED;
@@ -419,8 +461,9 @@ int main(int argc, char **argv)
 		esr.ext_op.umr.memory_objects = mem_objects;
 		esr.ext_op.umr.exp_access = IBV_EXP_ACCESS_LOCAL_WRITE | IBV_EXP_ACCESS_REMOTE_WRITE;
 		esr.ext_op.umr.modified_mr = modify_mr;
-		esr.ext_op.umr.base_addr = (uint64_t)(uintptr_t)emr[0]->addr;
-		esr.ext_op.umr.num_mrs = mr_num;
+		//TODO make sure umr.base_addr
+		esr.ext_op.umr.base_addr = (uint64_t)(uintptr_t)emr[0]->addr+((strow-1)/2)*sizeof(double);
+		esr.ext_op.umr.num_mrs = strow;
 		esr.ext_op.umr.mem_list.mem_reg_list = mem_reg_list;
 
 		//post WR to HCA to accomplish creating UMR
@@ -450,12 +493,20 @@ int main(int argc, char **argv)
 		printf("myrank:%d, buf_umr at 0x%x, sge.addr is 0x%x, sge.length is %d, UMR->length is %d, UMR->pd is0x%x, UMR->addr is 0x%x\n", myrank, (uintptr_t)buf_umr, list.addr, list.length, modify_mr->length, modify_mr->pd, modify_mr->addr);
 		if (myrank) {
 			// receiver prepares the receive request
-			if(test != UMR){
+			if((test == SR_COPY) ){
 				rr = (const struct ibv_recv_wr){ 0 };
 				rr.wr_id   = WR_ID;
 				rr.sg_list = sg_list;
-				rr.num_sge = (test == SGRS) ? parameters.block_num : 1;
-			} else{
+				rr.num_sge = (test == SGRS) ? strow : 1;
+			} else if(test == SGRS) {
+				for (i=0; i<sglist_num; i++ ){
+					nrr[i] = (const struct ibv_recv_wr){ 0 };
+					nrr[i].wr_id = WR_ID+i+1;
+					nrr[i].next = (i == (sglist_num-1)) ? NULL : &nrr[i+1];
+					nrr[i].sg_list = &esg_list[strow*i];
+					nrr[i].num_sge = strow; 
+				}
+			} else {
 				//TODO:  need use UMR
 				rr = (const struct ibv_recv_wr){ 0 };
 				rr.wr_id   = WR_ID;
@@ -464,15 +515,24 @@ int main(int argc, char **argv)
 			}
 		} else {
 			// sender prepares the send request
-			if((test == SGRS) || (test == SR_COPY)){
+			if((test == SR_COPY)){
 				sr = (const struct ibv_send_wr){ 0 };
 				sr.wr_id      = WR_ID;
 				sr.sg_list    = sg_list;
-				sr.num_sge    = (test == SGRS) ? parameters.block_num : 1;
+				sr.num_sge    = 1;
 				sr.opcode     = IBV_WR_SEND;
 				sr.send_flags = IBV_SEND_SIGNALED;
-			}
-			else{
+			} else if(test == SGRS) {
+				sr = (const struct ibv_send_wr){ 0 };
+				sr.wr_id = WR_ID;
+				sr.sg_list = esg_list;
+				sr.num_sge = strow; 
+				sr.opcode = IBV_WR_RDMA_WRITE;
+				sr.send_flags = IBV_SEND_SIGNALED;
+				sr.wr.rdma.remote_addr = remote_conn.addr;
+				sr.wr.rdma.rkey = remote_conn.rkey;
+
+			}else{
 				//TODO:  need use UMR
 				sr = (const struct ibv_send_wr){ 0 };
 				sr.wr_id      = WR_ID;
@@ -495,7 +555,7 @@ int main(int argc, char **argv)
 		for (i = 0; i < (parameters.iterN + parameters.iterW); i++) {
 			if (myrank) {
 				// post receive WR
-				if ((test == SGRS) || (test == SR_COPY)){
+				if((test == SR_COPY)){
 					if (ibv_post_recv(qp, &rr, &bad_rr)) {
 						fprintf(stderr, "failed to post receive WR!\n");
 						goto EXIT_DESTROY_EQP;
@@ -508,7 +568,7 @@ int main(int argc, char **argv)
 				}	
 				// wait for send
 				MPI_Barrier(MPI_COMM_WORLD);
-			} else {
+			} else if (!myrank){
 				// wait for recv
 				MPI_Barrier(MPI_COMM_WORLD);
 
@@ -517,27 +577,30 @@ int main(int argc, char **argv)
 
 				// copy the buffer
 				if (test == SR_COPY) {
-					for (j = 0; j < parameters.block_num; j++) {
-						memcpy((unsigned char *)buf_sg + j * parameters.block_size, (unsigned char *)buf_cp + j * parameters.stride, parameters.block_size);
-					}
-				}
+					for(j = 0; j<(strow-1)/2; j++)
+						memcpy((unsigned char *)buf_cp+j*sizeof(double), j*xdim*sizeof(double) + (unsigned char *)buf_umr + ((strow-1)/2) * sizeof(double), sizeof(double));
+					memcpy((unsigned char *)buf_cp+j*sizeof(double), j*xdim*sizeof(double) + (unsigned char *)buf_umr, strow * sizeof(double));
+					for(j = 0; j<(strow-1)/2; j++)
+						memcpy((unsigned char *)buf_cp+(strow+(strow-1)/2+j)*sizeof(double), (j+(strow-1)/2+1)*xdim*sizeof(double) + (unsigned char *)buf_umr + ((strow-1)/2) * sizeof(double), sizeof(double));
+				}		
 
 				// post send WR
-				if ((test == SGRS) || (test == SR_COPY)){
+				if((test == SR_COPY)){
 					if (ibv_post_send(qp, &sr, &bad_wr)) {
 						fprintf(stderr, "failed to post WR!\n");
 						goto EXIT_DESTROY_EQP;
 					}	
-				}else{
-					if (ibv_post_send(eqp, &sr, &bad_wr)) {
-						fprintf(stderr, "failed to post UMR WR!\n");
-						goto EXIT_DESTROY_EQP;
-					}
+				} else if(test == SGRS) {
+						if (ibv_post_send(qp, &sr, &bad_wr)) {
+							fprintf(stderr, "SGRS failed to post %dst send WR!\n",i);
+							goto EXIT_DESTROY_EQP;
+						}
+						
 				}
 			}
 
 			// poll the CQ
-			if ((test == SGRS) || (test == SR_COPY)){ 
+			if((test == SR_COPY)){
 				do ne = ibv_poll_cq(cq, 1, &wc); while (ne == 0);
 				if (ne < 0) {
 					fprintf(stderr, "rank%d failed to read CQ!\n", myrank);
@@ -559,47 +622,74 @@ int main(int argc, char **argv)
 					fprintf(stderr, "rank%d UMR Work completion status is:%s", myrank, ibv_wc_status_str(ewc.status));
 					goto EXIT_DESTROY_EQP;
 				}
-			}else if(!myrank){
-				do ne = ibv_exp_poll_cq(ecq, 1, &ewc, sizeof(ewc)); while (ne ==0);
+			}else if( (!myrank)){
+				if(test == UMR_W){ 
+				do ne = ibv_exp_poll_cq(ecq, 1, &ewc, sizeof(ewc)); while (ne ==0);}
+				else{
+				do ne = ibv_poll_cq(cq, 1, &wc); while (ne == 0);}
 				if (ne < 0) {
-					fprintf(stderr, "rank%d failed to read UMR CQ!\n", myrank);
+					fprintf(stderr, "rank%d failed to read %s CQ!\n", myrank,(test == SGRS)?"SGRS":"UMR_W");
 					goto EXIT_DESTROY_EQP;
 				}
-				if (ewc.status != IBV_WC_SUCCESS) {
-					fprintf(stderr, "rank%d failed to execute UMR WR!\n", myrank);
-					fprintf(stderr, "rank%d UMR Work completion status is:%s", myrank, ibv_wc_status_str(ewc.status));
+				if (((test == SGRS)? wc.status : ewc.status) != IBV_WC_SUCCESS) {
+					fprintf(stderr, "rank%d failed to execute %s WR!\n", myrank,(test == SGRS)?"SGRS":"UMR_W");
+					fprintf(stderr, "rank%d %s Work completion status is:%s.", myrank,(test == SGRS)?"SGRS":"UMR_W", ibv_wc_status_str((test == SGRS)? wc.status : ewc.status));
 					goto EXIT_DESTROY_EQP;
 				}
 			}
 			if (myrank) {
+				//if(dbg){
 				// receiver verifies the buffer
 				MPI_Barrier(MPI_COMM_WORLD);
-				buf = ((test != UMR)&&(test != UMR_W)) ? (unsigned char *)buf_sg : (unsigned char *)buf_umr;
-				c = 0x01;
+				buf = (double *)buf_cp;
+				c = 1.0;
 				if(dbg){
 				printf("[%s] ", (test == SGRS) ? "sgrs" : ((test == UMR) ? "umr" : ((test == UMR_W) ? "umr_write " : "sr_copy")));
 				printf("================received buf data===============\n");
-				for (j = 0; j < buf_size; j++){
-					printf("%x ", buf[j]);
+				if(test == SR_COPY)
+				for (j = 0; j < (2*strow-1); j++){
+					printf("%f ", buf[j]);
+				}
+				if((test == UMR) || (test == UMR_W))
+				for (m = 0; m < ydim; m++){
+					for (n = 0; n < xdim; n++) {
+						printf("%f ", buf[m*xdim+n]);
+					}
+					printf("\n");
+				}
+				if(test == SGRS)
+				for (j = 0; j < (2*strow-1); j++){
+					printf("%f ", buf[j]);
 				}
 				printf("\n================================================\n");}
-				for (m = 0; m < mr_num;  m++) {
-					for (n = 0; n < parameters.block_size/2; n++) {
-						j = (test != SR_COPY) ? (m * parameters.stride/2 + n) : (m * parameters.block_size/2 + n);
-						if (buf[j] != c) {
-							fprintf(stderr, "failed to verify the received data @%d!\n", j);
-							break;
-						}
-					}
-					if(m % 2) c++;
-				}
-			} else {
+//				for (m = 0; m < parameters.block_num;  m++) {
+//					for (n = 0; n < parameters.block_size; n++) {
+//						j = (test != SR_COPY) ? (m * parameters.stride + n) : (m * parameters.block_size + n);
+//						if (buf[j] != c) {
+//							fprintf(stderr, "failed to verify the received data @%d!\n", j);
+//							break;
+//						}
+//					}
+//					c++;
+//				}
+				//}
+			}else if(!myrank){
 				// copy the buffer
 				if (test == SR_COPY) {
-					for (j = 0; j < 2*parameters.block_num; j++) {
-						memcpy((unsigned char *)buf_cp + j * parameters.stride/2, (unsigned char *)buf_sg + j * parameters.block_size/2, parameters.block_size/2);
-					}
+					for(j = 0; j<(strow-1)/2; j++)
+						memcpy(j*xdim*sizeof(double) + (unsigned char *)buf_umr + ((strow-1)/2) * sizeof(double), (unsigned char *)buf_cp+j*sizeof(double), sizeof(double));
+					memcpy(j*xdim*sizeof(double) + (unsigned char *)buf_umr, (unsigned char *)buf_cp+j*sizeof(double), strow * sizeof(double));
+					for(j = 0; j<(strow-1)/2; j++)
+						memcpy((j+(strow-1)/2+1)*xdim*sizeof(double) + (unsigned char *)buf_umr + ((strow-1)/2) * sizeof(double), (unsigned char *)buf_cp+(strow+(strow-1)/2+j)*sizeof(double), sizeof(double));
 				}
+				if (test == SGRS) {
+					for(j = 0; j<(strow-1)/2; j++)
+						memcpy(j*xdim*sizeof(double) + (unsigned char *)buf_umr + ((strow-1)/2) * sizeof(double), (unsigned char *)buf_cp+j*sizeof(double), sizeof(double));
+					memcpy(j*xdim*sizeof(double) + (unsigned char *)buf_umr, (unsigned char *)buf_cp+j*sizeof(double), strow * sizeof(double));
+					for(j = 0; j<(strow-1)/2; j++)
+						memcpy((j+(strow-1)/2+1)*xdim*sizeof(double) + (unsigned char *)buf_umr + ((strow-1)/2) * sizeof(double), (unsigned char *)buf_cp+(strow+(strow-1)/2+j)*sizeof(double), sizeof(double));
+				}
+
 
 				// finish timing at sender side
 				tick = rdtsc() - tick;

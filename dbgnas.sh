@@ -28,7 +28,7 @@ scp /home/mxx/ddt_direct/UMR-master/nas_mg_z_w suse108:/home/mxx/ddt_direct/UMR-
 #$OMPI_PATH/bin/mpirun -np 2 -hostfile $HOSTFILE $NODE $BIND $ROOT $1 -E 1 -b 128 -n $block_num -s 256 -W 1000 -N 10000
 #done
 
-$OMPI_PATH/bin/mpirun -np 2 -hostfile $HOSTFILE $NODE $BIND $ROOT $NAS -E 1 -b 4 -n 31 -s 4 -W 1 -N 1 -d
+$OMPI_PATH/bin/mpirun -np 2 -hostfile $HOSTFILE $NODE $BIND $ROOT $NAS -E 1 -b 4 -n 64 -s 4 -W 0 -N 1 -d
 #$OMPI_PATH/bin/mpirun -np 2 -hostfile $HOSTFILE --mca $IB_SUPPROT \
 #                                          --mca $IB_HCA\
 #                                          --mca $RECEIVE_QUEUES\
