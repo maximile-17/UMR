@@ -17,7 +17,7 @@ ROOT="--allow-run-as-root"
 NODE="--map-by node"
 SGRS_UMR=/home/mxx/ddt_direct/UMR-master/sgrs_umr
 
-scp /home/mxx/ddt_direct/UMR-master/sgrs_umr* suse108:/home/mxx/ddt_direct/UMR-master/
+scp /home/mxx/ddt_direct/UMR-master/sgrs_umr_asym suse108:/home/mxx/ddt_direct/UMR-master/
 
 #for block_size in 128 256 512 1024 2048 4096 8192 16384 32768 65536 $[65536*2] $[65536*4] $[1024*512] $[1024*1024] $[1024*1024*2] $[1024*1024*4] $[1024*1024*8] $[1024*1024*16]
 #do
@@ -28,7 +28,7 @@ scp /home/mxx/ddt_direct/UMR-master/sgrs_umr* suse108:/home/mxx/ddt_direct/UMR-m
 #$OMPI_PATH/bin/mpirun -np 2 -hostfile $HOSTFILE $NODE $BIND $ROOT $1 -E 1 -b 128 -n $block_num -s 256 -W 1000 -N 10000
 #done
 
-$OMPI_PATH/bin/mpirun -np 2 -hostfile $HOSTFILE $NODE $BIND $ROOT $1 -E 1 -b 2 -n 128 -s 4 -W 1 -N 1 -d
+$OMPI_PATH/bin/mpirun -np 2 -hostfile $HOSTFILE $NODE $BIND $ROOT $1 -E 1 -b 2 -n 31 -s 4 -W 1 -N 1 -d
 #$OMPI_PATH/bin/mpirun -np 2 -hostfile $HOSTFILE --mca $IB_SUPPROT \
 #                                          --mca $IB_HCA\
 #                                          --mca $RECEIVE_QUEUES\

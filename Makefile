@@ -1,4 +1,4 @@
-TESTS       := sgrs_umr sgrs_umr_asym sgrs_umr_asym_try sgrs_umr_length sgrs_umr_largelist sgrs_umr_nmr sgrs_umr_stencil umr_stencil nas_mg_z_sr nas_mg_z_w
+TESTS       := sgrs_umr sgrs_umr_asym sgrs_umr_asym_try sgrs_umr_length sgrs_umr_largelist sgrs_umr_nmr sgrs_stencil_w sgrs_stencil_sr umr_stencil nas_mg_z_sr nas_mg_z_w
 
 MPI_PATH    = /home/mxx/opt/openmpi-4.0.0
 

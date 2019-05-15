@@ -23,12 +23,12 @@ scp /home/mxx/ddt_direct/UMR-master/sgrs_stencil_sr suse108:/home/mxx/ddt_direct
 #do
 #$OMPI_PATH/bin/mpirun -np 2 -hostfile $HOSTFILE $NODE $BIND $ROOT $1 -E 1 -b $block_size -n 16 -s $[1024*1024*16] -W 100 -N 1000
 #done
-#for block_num in 32 64 128 256 512 1024 2048 4096 8192 16384 32768 65536
-#do 
-#$OMPI_PATH/bin/mpirun -np 2 -hostfile $HOSTFILE $NODE $BIND $ROOT $1 -E 1 -b 128 -n $block_num -s 256 -W 1000 -N 10000
-#done
+for block_num in 3 5 7 9 11 13 15
+do 
+$OMPI_PATH/bin/mpirun -np 2 -hostfile $HOSTFILE $NODE $BIND $ROOT $SGRS_UMR -E 1 -b $block_num -n $block_num -s $block_num -W 1000 -N 10000 
+done
 
-$OMPI_PATH/bin/mpirun -np 2 -hostfile $HOSTFILE $NODE $BIND $ROOT $SGRS_UMR -E 1 -b 10 -n 7 -s 7 -W 1 -N 1 -d
+#$OMPI_PATH/bin/mpirun -np 2 -hostfile $HOSTFILE $NODE $BIND $ROOT $SGRS_UMR -E 1 -b 10 -n 5 -s 5 -W 1000 -N 10000 
 #$OMPI_PATH/bin/mpirun -np 2 -hostfile $HOSTFILE --mca $IB_SUPPROT \
 #                                          --mca $IB_HCA\
 #                                          --mca $RECEIVE_QUEUES\

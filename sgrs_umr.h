@@ -37,6 +37,8 @@ struct ib_conn {
 	uint32_t  qpn;
 	uint32_t  psn;
 	uint8_t gid[16];//used for ehternet link,RoCE
+	uint64_t  sgaddr;
+	uint32_t  sgrkey;
 	int myid;
 };
 enum sg_test {
