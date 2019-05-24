@@ -46,7 +46,7 @@ every folder has its own README, this file contains all readme information.
         sgrs(using sg_list) :this test can't support large matrix size 2DFFT computing
 ----------------------------------------------------------------------
 
-# README for UMR-master
+# README for UMR
 -----------------------------------------------------
     compare performance（latency） between sgrs，umr_send-recv，umr_write，memory copy
 
@@ -103,4 +103,7 @@ every folder has its own README, this file contains all readme information.
     --------------------------------------------------------------
     # sgrs_umr_cache:
     1 UMR contains different mr layouts, compare performace between sgrs and umr 
+    
+    # ssgrs_umr_largelist:
+    use sg_list in sender side, use UMR in receiver side, communication type: RDMA Write
 ----------------------------------------------------------------
